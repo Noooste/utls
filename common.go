@@ -18,7 +18,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"github.com/Noooste/utls/cpu"
+
 	"io"
 	"net"
 	"strings"
@@ -102,7 +102,6 @@ const (
 	extensionCertificateAuthorities  uint16 = 47
 	extensionSignatureAlgorithmsCert uint16 = 50
 	extensionKeyShare                uint16 = 51
-	extensionNextProtoNeg            uint16 = 13172 // not IANA assigned
 	extensionApplicationSettings     uint16 = 0x4469
 	extensionRenegotiationInfo       uint16 = 0xff01
 	extensionAzure                   uint16 = 0xff15
@@ -128,9 +127,9 @@ const (
 )
 
 // TLS 1.3 Key Share. See RFC 8446, Section 4.2.8.
-type keyShare struct {
-	group CurveID
-	data  []byte
+type KeyShare struct {
+	Group CurveID
+	Data  []byte
 }
 
 // TLS 1.3 PSK Key Exchange Modes. See RFC 8446, Section 4.2.9.
@@ -661,8 +660,8 @@ type Config struct {
 	InsecureSkipVerify bool
 
 	// InsecureSkipTimeVerify controls whether a client verifies the server's
-	// certificate chain against time. If InsecureSkipTimeVerify is true, 
-	// crypto/tls accepts the certificate even when it is expired. 
+	// certificate chain against time. If InsecureSkipTimeVerify is true,
+	// crypto/tls accepts the certificate even when it is expired.
 	//
 	// This field is ignored when InsecureSkipVerify is true.
 	InsecureSkipTimeVerify bool // [uTLS]

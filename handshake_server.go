@@ -25,7 +25,7 @@ import (
 type serverHandshakeState struct {
 	c            *Conn
 	ctx          context.Context
-	clientHello  *clientHelloMsg
+	clientHello  *ClientHelloMsg
 	hello        *serverHelloMsg
 	suite        *cipherSuite
 	ecdheOk      bool
@@ -121,60 +121,60 @@ func (hs *serverHandshakeState) handshake() error {
 		}
 	}
 
-	c.ekm = ekmFromMasterSecret(c.vers, hs.suite, hs.masterSecret, hs.clientHello.random, hs.hello.random)
+	c.ekm = ekmFromMasterSecret(c.vers, hs.suite, hs.masterSecret, hs.clientHello.Random, hs.hello.random)
 	atomic.StoreUint32(&c.handshakeStatus, 1)
 
 	return nil
 }
 
 // readClientHello reads a ClientHello message and selects the protocol version.
-func (c *Conn) readClientHello(ctx context.Context) (*clientHelloMsg, error) {
-	// clientHelloMsg is included in the transcript, but we haven't initialized
+func (c *Conn) readClientHello(ctx context.Context) (*ClientHelloMsg, error) {
+	// ClientHelloMsg is included in the transcript, but we haven't initialized
 	// it yet. The respective handshake functions will record it themselves.
 	msg, err := c.readHandshake(nil)
 	if err != nil {
 		return nil, err
 	}
-	clientHello, ok := msg.(*clientHelloMsg)
+	clientHello, ok := msg.(*ClientHelloMsg)
 	if !ok {
 		c.sendAlert(alertUnexpectedMessage)
 		return nil, unexpectedMessageError(clientHello, msg)
 	}
 
 	c.ClientHello = &ClientHelloMsg{
-		Raw:                              clientHello.raw,
-		Vers:                             clientHello.vers,
-		Random:                           clientHello.random,
-		SessionId:                        clientHello.sessionId,
-		CipherSuites:                     clientHello.cipherSuites,
-		CompressionMethods:               clientHello.compressionMethods,
-		NextProtoNeg:                     clientHello.nextProtoNeg,
-		ServerName:                       clientHello.serverName,
-		OcspStapling:                     clientHello.ocspStapling,
-		Scts:                             clientHello.scts,
-		Ems:                              clientHello.ems,
-		SupportedCurves:                  clientHello.supportedCurves,
-		SupportedPoints:                  clientHello.supportedPoints,
-		TicketSupported:                  clientHello.ticketSupported,
-		SessionTicket:                    clientHello.sessionTicket,
-		SupportedSignatureAlgorithms:     clientHello.supportedSignatureAlgorithms,
-		SecureRenegotiation:              clientHello.secureRenegotiation,
-		SecureRenegotiationSupported:     clientHello.secureRenegotiationSupported,
-		AlpnProtocols:                    clientHello.alpnProtocols,
-		SupportedSignatureAlgorithmsCert: clientHello.supportedSignatureAlgorithmsCert,
-		SupportedVersions:                clientHello.supportedVersions,
-		Cookie:                           clientHello.cookie,
-		EarlyData:                        clientHello.earlyData,
-		PskModes:                         clientHello.pskModes,
-		PskIdentities:                    clientHello.pskIdentities,
-		PskBinders:                       clientHello.pskBinders,
+		Raw:                              clientHello.Raw,
+		Vers:                             clientHello.Vers,
+		Random:                           clientHello.Random,
+		SessionId:                        clientHello.SessionId,
+		CipherSuites:                     clientHello.CipherSuites,
+		CompressionMethods:               clientHello.CompressionMethods,
+		NextProtoNeg:                     clientHello.NextProtoNeg,
+		ServerName:                       clientHello.ServerName,
+		OcspStapling:                     clientHello.OcspStapling,
+		Scts:                             clientHello.Scts,
+		Ems:                              clientHello.Ems,
+		SupportedCurves:                  clientHello.SupportedCurves,
+		SupportedPoints:                  clientHello.SupportedPoints,
+		TicketSupported:                  clientHello.TicketSupported,
+		SessionTicket:                    clientHello.SessionTicket,
+		SupportedSignatureAlgorithms:     clientHello.SupportedSignatureAlgorithms,
+		SecureRenegotiation:              clientHello.SecureRenegotiation,
+		SecureRenegotiationSupported:     clientHello.SecureRenegotiationSupported,
+		AlpnProtocols:                    clientHello.AlpnProtocols,
+		SupportedSignatureAlgorithmsCert: clientHello.SupportedSignatureAlgorithmsCert,
+		SupportedVersions:                clientHello.SupportedVersions,
+		Cookie:                           clientHello.Cookie,
+		EarlyData:                        clientHello.EarlyData,
+		PskModes:                         clientHello.PskModes,
+		PskIdentities:                    clientHello.PskIdentities,
+		PskBinders:                       clientHello.PskBinders,
 	}
 
-	c.ClientHello.KeyShares = make([]KeyShare, 0, len(clientHello.keyShares))
-	for _, el := range clientHello.keyShares {
+	c.ClientHello.KeyShares = make([]KeyShare, 0, len(clientHello.KeyShares))
+	for _, el := range clientHello.KeyShares {
 		c.ClientHello.KeyShares = append(c.ClientHello.KeyShares, KeyShare{
-			Group: el.group,
-			Data:  el.data,
+			Group: el.Group,
+			Data:  el.Data,
 		})
 	}
 
@@ -191,9 +191,9 @@ func (c *Conn) readClientHello(ctx context.Context) (*clientHelloMsg, error) {
 	}
 	c.ticketKeys = originalConfig.ticketKeys(configForClient)
 
-	clientVersions := clientHello.supportedVersions
-	if len(clientHello.supportedVersions) == 0 {
-		clientVersions = supportedVersionsFromMax(clientHello.vers)
+	clientVersions := clientHello.SupportedVersions
+	if len(clientHello.SupportedVersions) == 0 {
+		clientVersions = supportedVersionsFromMax(clientHello.Vers)
 	}
 	c.vers, ok = c.config.mutualVersion(roleServer, clientVersions)
 	if !ok {
@@ -215,7 +215,7 @@ func (hs *serverHandshakeState) processClientHello() error {
 
 	foundCompression := false
 	// We only support null compression, so check that the client offered it.
-	for _, compression := range hs.clientHello.compressionMethods {
+	for _, compression := range hs.clientHello.CompressionMethods {
 		if compression == compressionNone {
 			foundCompression = true
 			break
@@ -245,18 +245,18 @@ func (hs *serverHandshakeState) processClientHello() error {
 		return err
 	}
 
-	if len(hs.clientHello.secureRenegotiation) != 0 {
+	if len(hs.clientHello.SecureRenegotiation) != 0 {
 		c.sendAlert(alertHandshakeFailure)
 		return errors.New("tls: initial handshake had non-empty renegotiation extension")
 	}
 
-	hs.hello.secureRenegotiationSupported = hs.clientHello.secureRenegotiationSupported
+	hs.hello.secureRenegotiationSupported = hs.clientHello.SecureRenegotiationSupported
 	hs.hello.compressionMethod = compressionNone
-	if len(hs.clientHello.serverName) > 0 {
-		c.serverName = hs.clientHello.serverName
+	if len(hs.clientHello.ServerName) > 0 {
+		c.serverName = hs.clientHello.ServerName
 	}
 
-	selectedProto, err := negotiateALPN(c.config.NextProtos, hs.clientHello.alpnProtocols)
+	selectedProto, err := negotiateALPN(c.config.NextProtos, hs.clientHello.AlpnProtocols)
 	if err != nil {
 		c.sendAlert(alertNoApplicationProtocol)
 		return err
@@ -273,13 +273,13 @@ func (hs *serverHandshakeState) processClientHello() error {
 		}
 		return err
 	}
-	if hs.clientHello.scts {
+	if hs.clientHello.Scts {
 		hs.hello.scts = hs.cert.SignedCertificateTimestamps
 	}
 
-	hs.ecdheOk = supportsECDHE(c.config, hs.clientHello.supportedCurves, hs.clientHello.supportedPoints)
+	hs.ecdheOk = supportsECDHE(c.config, hs.clientHello.SupportedCurves, hs.clientHello.SupportedPoints)
 
-	if hs.ecdheOk && len(hs.clientHello.supportedPoints) > 0 {
+	if hs.ecdheOk && len(hs.clientHello.SupportedPoints) > 0 {
 		// Although omitting the ec_point_formats extension is permitted, some
 		// old OpenSSL version will refuse to handshake if not present.
 		//
@@ -361,7 +361,7 @@ func supportsECDHE(c *Config, supportedCurves []CurveID, supportedPoints []uint8
 		}
 	}
 	// Per RFC 8422, Section 5.1.2, if the Supported Point Formats extension is
-	// missing, uncompressed points are supported. If supportedPoints is empty,
+	// missing, uncompressed points are supported. If SupportedPoints is empty,
 	// the extension must be missing, as an empty extension body is rejected by
 	// the parser. See https://go.dev/issue/49126.
 	if len(supportedPoints) == 0 {
@@ -375,7 +375,7 @@ func (hs *serverHandshakeState) pickCipherSuite() error {
 	c := hs.c
 
 	preferenceOrder := cipherSuitesPreferenceOrder
-	if !hasAESGCMHardwareSupport || !aesgcmPreferred(hs.clientHello.cipherSuites) {
+	if !hasAESGCMHardwareSupport || !aesgcmPreferred(hs.clientHello.CipherSuites) {
 		preferenceOrder = cipherSuitesPreferenceOrderNoAES
 	}
 
@@ -390,17 +390,17 @@ func (hs *serverHandshakeState) pickCipherSuite() error {
 		}
 	}
 
-	hs.suite = selectCipherSuite(preferenceList, hs.clientHello.cipherSuites, hs.cipherSuiteOk)
+	hs.suite = selectCipherSuite(preferenceList, hs.clientHello.CipherSuites, hs.cipherSuiteOk)
 	if hs.suite == nil {
 		c.sendAlert(alertHandshakeFailure)
 		return errors.New("tls: no cipher suite supported by both client and server")
 	}
 	c.cipherSuite = hs.suite.id
 
-	for _, id := range hs.clientHello.cipherSuites {
+	for _, id := range hs.clientHello.CipherSuites {
 		if id == TLS_FALLBACK_SCSV {
 			// The client is doing a fallback connection. See RFC 7507.
-			if hs.clientHello.vers < c.config.maxSupportedVersion(roleServer) {
+			if hs.clientHello.Vers < c.config.maxSupportedVersion(roleServer) {
 				c.sendAlert(alertInappropriateFallback)
 				return errors.New("tls: client using inappropriate protocol fallback")
 			}
@@ -440,7 +440,7 @@ func (hs *serverHandshakeState) checkForResumption() bool {
 		return false
 	}
 
-	plaintext, usedOldKey := c.decryptTicket(hs.clientHello.sessionTicket)
+	plaintext, usedOldKey := c.decryptTicket(hs.clientHello.SessionTicket)
 	if plaintext == nil {
 		return false
 	}
@@ -462,7 +462,7 @@ func (hs *serverHandshakeState) checkForResumption() bool {
 
 	cipherSuiteOk := false
 	// Check that the client is still offering the ciphersuite in the session.
-	for _, id := range hs.clientHello.cipherSuites {
+	for _, id := range hs.clientHello.CipherSuites {
 		if id == hs.sessionState.cipherSuite {
 			cipherSuiteOk = true
 			break
@@ -498,7 +498,7 @@ func (hs *serverHandshakeState) doResumeHandshake() error {
 	c.cipherSuite = hs.suite.id
 	// We echo the client's session ID in the ServerHello to let it know
 	// that we're doing a resumption.
-	hs.hello.sessionId = hs.clientHello.sessionId
+	hs.hello.sessionId = hs.clientHello.SessionId
 	hs.hello.ticketSupported = hs.sessionState.usedOldKey
 	hs.finishedHash = newFinishedHash(c.vers, hs.suite)
 	hs.finishedHash.discardHandshakeBuffer()
@@ -530,11 +530,11 @@ func (hs *serverHandshakeState) doResumeHandshake() error {
 func (hs *serverHandshakeState) doFullHandshake() error {
 	c := hs.c
 
-	if hs.clientHello.ocspStapling && len(hs.cert.OCSPStaple) > 0 {
+	if hs.clientHello.OcspStapling && len(hs.cert.OCSPStaple) > 0 {
 		hs.hello.ocspStapling = true
 	}
 
-	hs.hello.ticketSupported = hs.clientHello.ticketSupported && !c.config.SessionTicketsDisabled
+	hs.hello.ticketSupported = hs.clientHello.TicketSupported && !c.config.SessionTicketsDisabled
 	hs.hello.cipherSuite = hs.suite.id
 
 	hs.finishedHash = newFinishedHash(hs.c.vers, hs.suite)
@@ -660,8 +660,8 @@ func (hs *serverHandshakeState) doFullHandshake() error {
 		c.sendAlert(alertHandshakeFailure)
 		return err
 	}
-	hs.masterSecret = masterFromPreMasterSecret(c.vers, hs.suite, preMasterSecret, hs.clientHello.random, hs.hello.random)
-	if err := c.config.writeKeyLog(keyLogLabelTLS12, hs.clientHello.random, hs.masterSecret); err != nil {
+	hs.masterSecret = masterFromPreMasterSecret(c.vers, hs.suite, preMasterSecret, hs.clientHello.Random, hs.hello.random)
+	if err := c.config.writeKeyLog(keyLogLabelTLS12, hs.clientHello.Random, hs.masterSecret); err != nil {
 		c.sendAlert(alertInternalError)
 		return err
 	}
@@ -725,7 +725,7 @@ func (hs *serverHandshakeState) establishKeys() error {
 	c := hs.c
 
 	clientMAC, serverMAC, clientKey, serverKey, clientIV, serverIV :=
-		keysFromMasterSecret(c.vers, hs.suite, hs.masterSecret, hs.clientHello.random, hs.hello.random, hs.suite.macLen, hs.suite.keyLen, hs.suite.ivLen)
+		keysFromMasterSecret(c.vers, hs.suite, hs.masterSecret, hs.clientHello.Random, hs.hello.random, hs.suite.macLen, hs.suite.keyLen, hs.suite.ivLen)
 
 	var clientCipher, serverCipher any
 	var clientHash, serverHash hash.Hash
@@ -907,19 +907,19 @@ func (c *Conn) processCertsFromClient(certificate Certificate) error {
 	return nil
 }
 
-func clientHelloInfo(ctx context.Context, c *Conn, clientHello *clientHelloMsg) *ClientHelloInfo {
-	supportedVersions := clientHello.supportedVersions
-	if len(clientHello.supportedVersions) == 0 {
-		supportedVersions = supportedVersionsFromMax(clientHello.vers)
+func clientHelloInfo(ctx context.Context, c *Conn, clientHello *ClientHelloMsg) *ClientHelloInfo {
+	supportedVersions := clientHello.SupportedVersions
+	if len(clientHello.SupportedVersions) == 0 {
+		supportedVersions = supportedVersionsFromMax(clientHello.Vers)
 	}
 
 	return &ClientHelloInfo{
-		CipherSuites:      clientHello.cipherSuites,
-		ServerName:        clientHello.serverName,
-		SupportedCurves:   clientHello.supportedCurves,
-		SupportedPoints:   clientHello.supportedPoints,
-		SignatureSchemes:  clientHello.supportedSignatureAlgorithms,
-		SupportedProtos:   clientHello.alpnProtocols,
+		CipherSuites:      clientHello.CipherSuites,
+		ServerName:        clientHello.ServerName,
+		SupportedCurves:   clientHello.SupportedCurves,
+		SupportedPoints:   clientHello.SupportedPoints,
+		SignatureSchemes:  clientHello.SupportedSignatureAlgorithms,
+		SupportedProtos:   clientHello.AlpnProtocols,
 		SupportedVersions: supportedVersions,
 		Conn:              c.conn,
 		config:            c.config,

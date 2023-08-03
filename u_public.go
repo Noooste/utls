@@ -74,8 +74,6 @@ func (chs *PubClientHandshakeState) toPrivate13() *clientHandshakeStateTLS13 {
 			transcript:    chs.State13.Transcript,
 			masterSecret:  chs.MasterSecret,
 			trafficSecret: chs.State13.TrafficSecret,
-			certCompAlgs:  chs.State13.CertCompAlgs,
-
 
 			uconn: chs.uconn,
 		}
@@ -253,7 +251,7 @@ type PubServerHelloMsg struct {
 
 	// 1.3
 	SupportedVersion        uint16
-	ServerShare             keyShare
+	ServerShare             KeyShare
 	SelectedIdentityPresent bool
 	SelectedIdentity        uint16
 	Cookie                  []byte  // HelloRetryRequest extension
@@ -353,76 +351,76 @@ type PubClientHelloMsg struct {
 	PskBinders                       [][]byte
 }
 
-func (chm *PubClientHelloMsg) getPrivatePtr() *clientHelloMsg {
+func (chm *PubClientHelloMsg) getPrivatePtr() *ClientHelloMsg {
 	if chm == nil {
 		return nil
 	} else {
-		return &clientHelloMsg{
-			raw:                          chm.Raw,
-			vers:                         chm.Vers,
-			random:                       chm.Random,
-			sessionId:                    chm.SessionId,
-			cipherSuites:                 chm.CipherSuites,
-			compressionMethods:           chm.CompressionMethods,
-			nextProtoNeg:                 chm.NextProtoNeg,
-			serverName:                   chm.ServerName,
-			ocspStapling:                 chm.OcspStapling,
-			scts:                         chm.Scts,
-			ems:                          chm.Ems,
-			supportedCurves:              chm.SupportedCurves,
-			supportedPoints:              chm.SupportedPoints,
-			ticketSupported:              chm.TicketSupported,
-			sessionTicket:                chm.SessionTicket,
-			supportedSignatureAlgorithms: chm.SupportedSignatureAlgorithms,
-			secureRenegotiation:          chm.SecureRenegotiation,
-			secureRenegotiationSupported: chm.SecureRenegotiationSupported,
-			alpnProtocols:                chm.AlpnProtocols,
+		return &ClientHelloMsg{
+			Raw:                          chm.Raw,
+			Vers:                         chm.Vers,
+			Random:                       chm.Random,
+			SessionId:                    chm.SessionId,
+			CipherSuites:                 chm.CipherSuites,
+			CompressionMethods:           chm.CompressionMethods,
+			NextProtoNeg:                 chm.NextProtoNeg,
+			ServerName:                   chm.ServerName,
+			OcspStapling:                 chm.OcspStapling,
+			Scts:                         chm.Scts,
+			Ems:                          chm.Ems,
+			SupportedCurves:              chm.SupportedCurves,
+			SupportedPoints:              chm.SupportedPoints,
+			TicketSupported:              chm.TicketSupported,
+			SessionTicket:                chm.SessionTicket,
+			SupportedSignatureAlgorithms: chm.SupportedSignatureAlgorithms,
+			SecureRenegotiation:          chm.SecureRenegotiation,
+			SecureRenegotiationSupported: chm.SecureRenegotiationSupported,
+			AlpnProtocols:                chm.AlpnProtocols,
 
-			supportedSignatureAlgorithmsCert: chm.SupportedSignatureAlgorithmsCert,
-			supportedVersions:                chm.SupportedVersions,
-			cookie:                           chm.Cookie,
-			keyShares:                        KeyShares(chm.KeyShares).ToPrivate(),
-			earlyData:                        chm.EarlyData,
-			pskModes:                         chm.PskModes,
-			pskIdentities:                    PskIdentities(chm.PskIdentities).ToPrivate(),
-			pskBinders:                       chm.PskBinders,
+			SupportedSignatureAlgorithmsCert: chm.SupportedSignatureAlgorithmsCert,
+			SupportedVersions:                chm.SupportedVersions,
+			Cookie:                           chm.Cookie,
+			KeyShares:                        KeyShares(chm.KeyShares).ToPrivate(),
+			EarlyData:                        chm.EarlyData,
+			PskModes:                         chm.PskModes,
+			PskIdentities:                    PskIdentities(chm.PskIdentities).ToPrivate(),
+			PskBinders:                       chm.PskBinders,
 		}
 	}
 }
 
-func (chm *clientHelloMsg) getPublicPtr() *PubClientHelloMsg {
+func (chm *ClientHelloMsg) getPublicPtr() *PubClientHelloMsg {
 	if chm == nil {
 		return nil
 	} else {
 		return &PubClientHelloMsg{
-			Raw:                          chm.raw,
-			Vers:                         chm.vers,
-			Random:                       chm.random,
-			SessionId:                    chm.sessionId,
-			CipherSuites:                 chm.cipherSuites,
-			CompressionMethods:           chm.compressionMethods,
-			NextProtoNeg:                 chm.nextProtoNeg,
-			ServerName:                   chm.serverName,
-			OcspStapling:                 chm.ocspStapling,
-			Scts:                         chm.scts,
-			Ems:                          chm.ems,
-			SupportedCurves:              chm.supportedCurves,
-			SupportedPoints:              chm.supportedPoints,
-			TicketSupported:              chm.ticketSupported,
-			SessionTicket:                chm.sessionTicket,
-			SupportedSignatureAlgorithms: chm.supportedSignatureAlgorithms,
-			SecureRenegotiation:          chm.secureRenegotiation,
-			SecureRenegotiationSupported: chm.secureRenegotiationSupported,
-			AlpnProtocols:                chm.alpnProtocols,
+			Raw:                          chm.Raw,
+			Vers:                         chm.Vers,
+			Random:                       chm.Random,
+			SessionId:                    chm.SessionId,
+			CipherSuites:                 chm.CipherSuites,
+			CompressionMethods:           chm.CompressionMethods,
+			NextProtoNeg:                 chm.NextProtoNeg,
+			ServerName:                   chm.ServerName,
+			OcspStapling:                 chm.OcspStapling,
+			Scts:                         chm.Scts,
+			Ems:                          chm.Ems,
+			SupportedCurves:              chm.SupportedCurves,
+			SupportedPoints:              chm.SupportedPoints,
+			TicketSupported:              chm.TicketSupported,
+			SessionTicket:                chm.SessionTicket,
+			SupportedSignatureAlgorithms: chm.SupportedSignatureAlgorithms,
+			SecureRenegotiation:          chm.SecureRenegotiation,
+			SecureRenegotiationSupported: chm.SecureRenegotiationSupported,
+			AlpnProtocols:                chm.AlpnProtocols,
 
-			SupportedSignatureAlgorithmsCert: chm.supportedSignatureAlgorithmsCert,
-			SupportedVersions:                chm.supportedVersions,
-			Cookie:                           chm.cookie,
-			KeyShares:                        keyShares(chm.keyShares).ToPublic(),
-			EarlyData:                        chm.earlyData,
-			PskModes:                         chm.pskModes,
-			PskIdentities:                    pskIdentities(chm.pskIdentities).ToPublic(),
-			PskBinders:                       chm.pskBinders,
+			SupportedSignatureAlgorithmsCert: chm.SupportedSignatureAlgorithmsCert,
+			SupportedVersions:                chm.SupportedVersions,
+			Cookie:                           chm.Cookie,
+			KeyShares:                        keyShares(chm.KeyShares).ToPublic(),
+			EarlyData:                        chm.EarlyData,
+			PskModes:                         chm.PskModes,
+			PskIdentities:                    pskIdentities(chm.PskIdentities).ToPublic(),
+			PskBinders:                       chm.PskBinders,
 		}
 	}
 }
@@ -430,7 +428,7 @@ func (chm *clientHelloMsg) getPublicPtr() *PubClientHelloMsg {
 // UnmarshalClientHello allows external code to parse raw client hellos.
 // It returns nil on failure.
 func UnmarshalClientHello(data []byte) *PubClientHelloMsg {
-	m := &clientHelloMsg{}
+	m := &ClientHelloMsg{}
 	if m.unmarshal(data) {
 		return m.getPublicPtr()
 	}
@@ -543,26 +541,21 @@ func (fh *finishedHash) getPublicObj() FinishedHash {
 	}
 }
 
-// TLS 1.3 Key Share. See RFC 8446, Section 4.2.8.
-type KeyShare struct {
-	Group CurveID `json:"group"`
-	Data  []byte  `json:"key_exchange,omitempty"` // optional
-}
-
+type keyShares []KeyShare
 type KeyShares []KeyShare
-type keyShares []keyShare
 
 func (kss keyShares) ToPublic() []KeyShare {
 	var KSS []KeyShare
 	for _, ks := range kss {
-		KSS = append(KSS, KeyShare{Data: ks.data, Group: ks.group})
+		KSS = append(KSS, KeyShare{Data: ks.Data, Group: ks.Group})
 	}
 	return KSS
 }
-func (KSS KeyShares) ToPrivate() []keyShare {
-	var kss []keyShare
+
+func (KSS KeyShares) ToPrivate() []KeyShare {
+	var kss []KeyShare
 	for _, KS := range KSS {
-		kss = append(kss, keyShare{data: KS.Data, group: KS.Group})
+		kss = append(kss, KeyShare{Data: KS.Data, Group: KS.Group})
 	}
 	return kss
 }

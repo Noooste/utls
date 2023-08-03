@@ -5,6 +5,7 @@
 package tls
 
 import (
+	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -287,7 +288,7 @@ func utlsIdToSpec(id ClientHelloID) (ClientHelloSpec, error) {
 					CertCompressionBrotli,
 				}},
 				&ApplicationSettingsExtension{
-					SupportedALPNList: []string{
+					SupportedProtocols: []string{
 						"h2",
 						"http/1.1",
 					},
@@ -694,14 +695,7 @@ func utlsIdToSpec(id ClientHelloID) (ClientHelloSpec, error) {
 				&SessionTicketExtension{},
 				&ALPNExtension{AlpnProtocols: []string{"h2", "http/1.1"}}, //application_layer_protocol_negotiation
 				&StatusRequestExtension{},
-				&DelegatedCredentialsExtension{
-					AlgorithmsSignature: []SignatureScheme{ //signature_algorithms
-						ECDSAWithP256AndSHA256,
-						ECDSAWithP384AndSHA384,
-						ECDSAWithP521AndSHA512,
-						ECDSAWithSHA1,
-					},
-				},
+				&DelegatedCredentialsExtension{},
 				&KeyShareExtension{[]KeyShare{
 					{Group: X25519},
 					{Group: CurveP256}, //key_share
@@ -2020,6 +2014,10 @@ func (uconn *UConn) applyPresetByID(id ClientHelloID) (err error) {
 // ApplyPreset should only be used in conjunction with HelloCustom to apply custom specs.
 // Fields of TLSExtensions that are slices/pointers are shared across different connections with
 // same ClientHelloSpec. It is advised to use different specs and avoid any shared state.
+
+// ApplyPreset should only be used in conjunction with HelloCustom to apply custom specs.
+// Fields of TLSExtensions that are slices/pointers are shared across different connections with
+// same ClientHelloSpec. It is advised to use different specs and avoid any shared state.
 func (uconn *UConn) ApplyPreset(p *ClientHelloSpec) error {
 	var err error
 
@@ -2151,11 +2149,7 @@ func (uconn *UConn) ApplyPreset(p *ClientHelloSpec) error {
 			}
 		case *NPNExtension:
 			haveNPN = true
-
-		case *CompressCertificateExtension:
-			uconn.HandshakeState.State13.CertCompAlgs = ext.Algorithms
 		}
-
 	}
 
 	// The default golang behavior in makeClientHello always sets NextProtoNeg if NextProtos is set,

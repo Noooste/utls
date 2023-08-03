@@ -395,7 +395,7 @@ func (c *UConn) clientHandshake(ctx context.Context) (err error) {
 	}
 
 	if c.handshakes > 0 {
-		hello.secureRenegotiation = c.clientFinished[:]
+		hello.SecureRenegotiation = c.clientFinished[:]
 	}
 	// [uTLS section ends]
 

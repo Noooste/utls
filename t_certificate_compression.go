@@ -22,7 +22,6 @@ type CompressCertificateExtension struct {
 }
 
 func (e *CompressCertificateExtension) writeToUConn(uc *UConn) error {
-	uc.extCompressCerts = true
 	return nil
 }
 
@@ -42,7 +41,7 @@ func (e *CompressCertificateExtension) Read(b []byte) (int, error) {
 	b[0] = byte(extensionCompressCertificate >> 8)
 	b[1] = byte(extensionCompressCertificate)
 	b[2] = byte((extLen + 1) >> 8)
-	b[3] = byte((extLen + 1))
+	b[3] = byte(extLen + 1)
 	b[4] = byte(extLen)
 
 	i := 5
@@ -62,9 +61,9 @@ type compressedCertificateMsg struct {
 	compressedCertificateMessage []byte
 }
 
-func (m *compressedCertificateMsg) marshal() []byte {
+func (m *compressedCertificateMsg) marshal() ([]byte, error) {
 	if m.raw != nil {
-		return m.raw
+		return m.raw, nil
 	}
 
 	panic("utls: compressedCertificateMsg.marshal() not actually implemented")

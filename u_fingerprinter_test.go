@@ -296,7 +296,7 @@ func TestUTLSFingerprintClientHelloAlwaysAddPadding(t *testing.T) {
 	if err != nil {
 		t.Errorf("got error: %v; expected to succeed", err)
 	}
-	specWithPadding, err := utlsIdToSpec(HelloChrome_101)
+	specWithPadding, err := utlsIdToSpec(HelloChrome_100)
 	if err != nil {
 		t.Errorf("got error: %v; expected to succeed", err)
 	}

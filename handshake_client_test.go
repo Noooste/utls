@@ -1453,15 +1453,15 @@ func TestHostnameInSNI(t *testing.T) {
 		c.Close()
 		s.Close()
 
-		var m clientHelloMsg
+		var m ClientHelloMsg
 		if !m.unmarshal(record) {
 			t.Errorf("unmarshaling ClientHello for %q failed", tt.in)
 			continue
 		}
-		if tt.in != tt.out && m.serverName == tt.in {
+		if tt.in != tt.out && m.ServerName == tt.in {
 			t.Errorf("prohibited %q found in ClientHello: %x", tt.in, record)
 		}
-		if m.serverName != tt.out {
+		if m.ServerName != tt.out {
 			t.Errorf("expected %q not found in ClientHello: %x", tt.out, record)
 		}
 	}
