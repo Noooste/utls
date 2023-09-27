@@ -8,7 +8,9 @@ import (
 	"bytes"
 	"context"
 	"crypto"
+	"crypto/ecdh"
 	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
@@ -22,8 +24,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"golang.org/x/crypto/curve25519"
 )
 
 func testClientHello(t *testing.T, serverConfig *Config, m handshakeMessage) {
@@ -41,8 +41,8 @@ func testClientHelloFailure(t *testing.T, serverConfig *Config, m handshakeMessa
 	c, s := localPipe(t)
 	go func() {
 		cli := Client(c, testConfig)
-		if ch, ok := m.(*ClientHelloMsg); ok {
-			cli.vers = ch.Vers
+		if ch, ok := m.(*clientHelloMsg); ok {
+			cli.vers = ch.vers
 		}
 		if _, err := cli.writeHandshakeRecord(m, nil); err != nil {
 			testFatal(t, err)
@@ -83,44 +83,44 @@ func TestRejectBadProtocolVersion(t *testing.T) {
 	config := testConfig.Clone()
 	config.MinVersion = VersionSSL30
 	for _, v := range badProtocolVersions {
-		testClientHelloFailure(t, config, &ClientHelloMsg{
-			Vers:   v,
-			Random: make([]byte, 32),
+		testClientHelloFailure(t, config, &clientHelloMsg{
+			vers:   v,
+			random: make([]byte, 32),
 		}, "unsupported versions")
 	}
-	testClientHelloFailure(t, config, &ClientHelloMsg{
-		Vers:              VersionTLS12,
-		SupportedVersions: badProtocolVersions,
-		Random:            make([]byte, 32),
+	testClientHelloFailure(t, config, &clientHelloMsg{
+		vers:              VersionTLS12,
+		supportedVersions: badProtocolVersions,
+		random:            make([]byte, 32),
 	}, "unsupported versions")
 }
 
 func TestNoSuiteOverlap(t *testing.T) {
-	clientHello := &ClientHelloMsg{
-		Vers:               VersionTLS10,
-		Random:             make([]byte, 32),
-		CipherSuites:       []uint16{0xff00},
-		CompressionMethods: []uint8{compressionNone},
+	clientHello := &clientHelloMsg{
+		vers:               VersionTLS10,
+		random:             make([]byte, 32),
+		cipherSuites:       []uint16{0xff00},
+		compressionMethods: []uint8{compressionNone},
 	}
 	testClientHelloFailure(t, testConfig, clientHello, "no cipher suite supported by both client and server")
 }
 
 func TestNoCompressionOverlap(t *testing.T) {
-	clientHello := &ClientHelloMsg{
-		Vers:               VersionTLS10,
-		Random:             make([]byte, 32),
-		CipherSuites:       []uint16{TLS_RSA_WITH_RC4_128_SHA},
-		CompressionMethods: []uint8{0xff},
+	clientHello := &clientHelloMsg{
+		vers:               VersionTLS10,
+		random:             make([]byte, 32),
+		cipherSuites:       []uint16{TLS_RSA_WITH_RC4_128_SHA},
+		compressionMethods: []uint8{0xff},
 	}
 	testClientHelloFailure(t, testConfig, clientHello, "client does not support uncompressed connections")
 }
 
 func TestNoRC4ByDefault(t *testing.T) {
-	clientHello := &ClientHelloMsg{
-		Vers:               VersionTLS10,
-		Random:             make([]byte, 32),
-		CipherSuites:       []uint16{TLS_RSA_WITH_RC4_128_SHA},
-		CompressionMethods: []uint8{compressionNone},
+	clientHello := &clientHelloMsg{
+		vers:               VersionTLS10,
+		random:             make([]byte, 32),
+		cipherSuites:       []uint16{TLS_RSA_WITH_RC4_128_SHA},
+		compressionMethods: []uint8{compressionNone},
 	}
 	serverConfig := testConfig.Clone()
 	// Reset the enabled cipher suites to nil in order to test the
@@ -130,26 +130,26 @@ func TestNoRC4ByDefault(t *testing.T) {
 }
 
 func TestRejectSNIWithTrailingDot(t *testing.T) {
-	testClientHelloFailure(t, testConfig, &ClientHelloMsg{
-		Vers:       VersionTLS12,
-		Random:     make([]byte, 32),
-		ServerName: "foo.com.",
+	testClientHelloFailure(t, testConfig, &clientHelloMsg{
+		vers:       VersionTLS12,
+		random:     make([]byte, 32),
+		serverName: "foo.com.",
 	}, "unexpected message")
 }
 
 func TestDontSelectECDSAWithRSAKey(t *testing.T) {
 	// Test that, even when both sides support an ECDSA cipher suite, it
 	// won't be selected if the server's private key doesn't support it.
-	clientHello := &ClientHelloMsg{
-		Vers:               VersionTLS10,
-		Random:             make([]byte, 32),
-		CipherSuites:       []uint16{TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA},
-		CompressionMethods: []uint8{compressionNone},
-		SupportedCurves:    []CurveID{CurveP256},
-		SupportedPoints:    []uint8{pointFormatUncompressed},
+	clientHello := &clientHelloMsg{
+		vers:               VersionTLS10,
+		random:             make([]byte, 32),
+		cipherSuites:       []uint16{TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA},
+		compressionMethods: []uint8{compressionNone},
+		supportedCurves:    []CurveID{CurveP256},
+		supportedPoints:    []uint8{pointFormatUncompressed},
 	}
 	serverConfig := testConfig.Clone()
-	serverConfig.CipherSuites = clientHello.CipherSuites
+	serverConfig.CipherSuites = clientHello.cipherSuites
 	serverConfig.Certificates = make([]Certificate, 1)
 	serverConfig.Certificates[0].Certificate = [][]byte{testECDSACertificate}
 	serverConfig.Certificates[0].PrivateKey = testECDSAPrivateKey
@@ -166,16 +166,16 @@ func TestDontSelectECDSAWithRSAKey(t *testing.T) {
 func TestDontSelectRSAWithECDSAKey(t *testing.T) {
 	// Test that, even when both sides support an RSA cipher suite, it
 	// won't be selected if the server's private key doesn't support it.
-	clientHello := &ClientHelloMsg{
-		Vers:               VersionTLS10,
-		Random:             make([]byte, 32),
-		CipherSuites:       []uint16{TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA},
-		CompressionMethods: []uint8{compressionNone},
-		SupportedCurves:    []CurveID{CurveP256},
-		SupportedPoints:    []uint8{pointFormatUncompressed},
+	clientHello := &clientHelloMsg{
+		vers:               VersionTLS10,
+		random:             make([]byte, 32),
+		cipherSuites:       []uint16{TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA},
+		compressionMethods: []uint8{compressionNone},
+		supportedCurves:    []CurveID{CurveP256},
+		supportedPoints:    []uint8{pointFormatUncompressed},
 	}
 	serverConfig := testConfig.Clone()
-	serverConfig.CipherSuites = clientHello.CipherSuites
+	serverConfig.CipherSuites = clientHello.cipherSuites
 	// First test that it *does* work when the server's key is RSA.
 	testClientHello(t, serverConfig, clientHello)
 
@@ -189,12 +189,12 @@ func TestDontSelectRSAWithECDSAKey(t *testing.T) {
 }
 
 func TestRenegotiationExtension(t *testing.T) {
-	clientHello := &ClientHelloMsg{
-		Vers:                         VersionTLS12,
-		CompressionMethods:           []uint8{compressionNone},
-		Random:                       make([]byte, 32),
-		SecureRenegotiationSupported: true,
-		CipherSuites:                 []uint16{TLS_RSA_WITH_RC4_128_SHA},
+	clientHello := &clientHelloMsg{
+		vers:                         VersionTLS12,
+		compressionMethods:           []uint8{compressionNone},
+		random:                       make([]byte, 32),
+		secureRenegotiationSupported: true,
+		cipherSuites:                 []uint16{TLS_RSA_WITH_RC4_128_SHA},
 	}
 
 	bufChan := make(chan []byte, 1)
@@ -202,7 +202,7 @@ func TestRenegotiationExtension(t *testing.T) {
 
 	go func() {
 		cli := Client(c, testConfig)
-		cli.vers = clientHello.Vers
+		cli.vers = clientHello.vers
 		if _, err := cli.writeHandshakeRecord(clientHello, nil); err != nil {
 			testFatal(t, err)
 		}
@@ -243,10 +243,10 @@ func TestRenegotiationExtension(t *testing.T) {
 func TestTLS12OnlyCipherSuites(t *testing.T) {
 	// Test that a Server doesn't select a TLS 1.2-only cipher suite when
 	// the client negotiates TLS 1.1.
-	clientHello := &ClientHelloMsg{
-		Vers:   VersionTLS11,
-		Random: make([]byte, 32),
-		CipherSuites: []uint16{
+	clientHello := &clientHelloMsg{
+		vers:   VersionTLS11,
+		random: make([]byte, 32),
+		cipherSuites: []uint16{
 			// The Server, by default, will use the client's
 			// preference order. So the GCM cipher suite
 			// will be selected unless it's excluded because
@@ -254,16 +254,16 @@ func TestTLS12OnlyCipherSuites(t *testing.T) {
 			TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 			TLS_RSA_WITH_RC4_128_SHA,
 		},
-		CompressionMethods: []uint8{compressionNone},
-		SupportedCurves:    []CurveID{CurveP256, CurveP384, CurveP521},
-		SupportedPoints:    []uint8{pointFormatUncompressed},
+		compressionMethods: []uint8{compressionNone},
+		supportedCurves:    []CurveID{CurveP256, CurveP384, CurveP521},
+		supportedPoints:    []uint8{pointFormatUncompressed},
 	}
 
 	c, s := localPipe(t)
 	replyChan := make(chan any)
 	go func() {
 		cli := Client(c, testConfig)
-		cli.vers = clientHello.Vers
+		cli.vers = clientHello.vers
 		if _, err := cli.writeHandshakeRecord(clientHello, nil); err != nil {
 			testFatal(t, err)
 		}
@@ -276,7 +276,7 @@ func TestTLS12OnlyCipherSuites(t *testing.T) {
 		}
 	}()
 	config := testConfig.Clone()
-	config.CipherSuites = clientHello.CipherSuites
+	config.CipherSuites = clientHello.cipherSuites
 	Server(s, config).Handshake()
 	s.Close()
 	reply := <-replyChan
@@ -310,20 +310,20 @@ func TestTLSPointFormats(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			clientHello := &ClientHelloMsg{
-				Vers:               VersionTLS12,
-				Random:             make([]byte, 32),
-				CipherSuites:       tt.cipherSuites,
-				CompressionMethods: []uint8{compressionNone},
-				SupportedCurves:    tt.supportedCurves,
-				SupportedPoints:    tt.supportedPoints,
+			clientHello := &clientHelloMsg{
+				vers:               VersionTLS12,
+				random:             make([]byte, 32),
+				cipherSuites:       tt.cipherSuites,
+				compressionMethods: []uint8{compressionNone},
+				supportedCurves:    tt.supportedCurves,
+				supportedPoints:    tt.supportedPoints,
 			}
 
 			c, s := localPipe(t)
 			replyChan := make(chan any)
 			go func() {
 				cli := Client(c, testConfig)
-				cli.vers = clientHello.Vers
+				cli.vers = clientHello.vers
 				if _, err := cli.writeHandshakeRecord(clientHello, nil); err != nil {
 					testFatal(t, err)
 				}
@@ -336,7 +336,7 @@ func TestTLSPointFormats(t *testing.T) {
 				}
 			}()
 			config := testConfig.Clone()
-			config.CipherSuites = clientHello.CipherSuites
+			config.CipherSuites = clientHello.cipherSuites
 			Server(s, config).Handshake()
 			s.Close()
 			reply := <-replyChan
@@ -1045,12 +1045,12 @@ func TestHandshakeServerSNIGetCertificateError(t *testing.T) {
 		return nil, errors.New(errMsg)
 	}
 
-	clientHello := &ClientHelloMsg{
-		Vers:               VersionTLS10,
-		Random:             make([]byte, 32),
-		CipherSuites:       []uint16{TLS_RSA_WITH_RC4_128_SHA},
-		CompressionMethods: []uint8{compressionNone},
-		ServerName:         "test",
+	clientHello := &clientHelloMsg{
+		vers:               VersionTLS10,
+		random:             make([]byte, 32),
+		cipherSuites:       []uint16{TLS_RSA_WITH_RC4_128_SHA},
+		compressionMethods: []uint8{compressionNone},
+		serverName:         "test",
 	}
 	testClientHelloFailure(t, serverConfig, clientHello, errMsg)
 }
@@ -1066,11 +1066,11 @@ func TestHandshakeServerEmptyCertificates(t *testing.T) {
 	}
 	serverConfig.Certificates = nil
 
-	clientHello := &ClientHelloMsg{
-		Vers:               VersionTLS10,
-		Random:             make([]byte, 32),
-		CipherSuites:       []uint16{TLS_RSA_WITH_RC4_128_SHA},
-		CompressionMethods: []uint8{compressionNone},
+	clientHello := &clientHelloMsg{
+		vers:               VersionTLS10,
+		random:             make([]byte, 32),
+		cipherSuites:       []uint16{TLS_RSA_WITH_RC4_128_SHA},
+		compressionMethods: []uint8{compressionNone},
 	}
 	testClientHelloFailure(t, serverConfig, clientHello, errMsg)
 
@@ -1078,11 +1078,11 @@ func TestHandshakeServerEmptyCertificates(t *testing.T) {
 	// should always return a “no certificates” error.
 	serverConfig.GetCertificate = nil
 
-	clientHello = &ClientHelloMsg{
-		Vers:               VersionTLS10,
-		Random:             make([]byte, 32),
-		CipherSuites:       []uint16{TLS_RSA_WITH_RC4_128_SHA},
-		CompressionMethods: []uint8{compressionNone},
+	clientHello = &clientHelloMsg{
+		vers:               VersionTLS10,
+		random:             make([]byte, 32),
+		cipherSuites:       []uint16{TLS_RSA_WITH_RC4_128_SHA},
+		compressionMethods: []uint8{compressionNone},
 	}
 	testClientHelloFailure(t, serverConfig, clientHello, "no certificates")
 }
@@ -1425,12 +1425,12 @@ func TestClientAuth(t *testing.T) {
 func TestSNIGivenOnFailure(t *testing.T) {
 	const expectedServerName = "test.testing"
 
-	clientHello := &ClientHelloMsg{
-		Vers:               VersionTLS10,
-		Random:             make([]byte, 32),
-		CipherSuites:       []uint16{TLS_RSA_WITH_RC4_128_SHA},
-		CompressionMethods: []uint8{compressionNone},
-		ServerName:         expectedServerName,
+	clientHello := &clientHelloMsg{
+		vers:               VersionTLS10,
+		random:             make([]byte, 32),
+		cipherSuites:       []uint16{TLS_RSA_WITH_RC4_128_SHA},
+		compressionMethods: []uint8{compressionNone},
+		serverName:         expectedServerName,
 	}
 
 	serverConfig := testConfig.Clone()
@@ -1440,7 +1440,7 @@ func TestSNIGivenOnFailure(t *testing.T) {
 	c, s := localPipe(t)
 	go func() {
 		cli := Client(c, testConfig)
-		cli.vers = clientHello.Vers
+		cli.vers = clientHello.vers
 		if _, err := cli.writeHandshakeRecord(clientHello, nil); err != nil {
 			testFatal(t, err)
 		}
@@ -1827,9 +1827,9 @@ func TestAESCipherReordering(t *testing.T) {
 					},
 					vers: VersionTLS12,
 				},
-				clientHello: &ClientHelloMsg{
-					CipherSuites: tc.clientCiphers,
-					Vers:         VersionTLS12,
+				clientHello: &clientHelloMsg{
+					cipherSuites: tc.clientCiphers,
+					vers:         VersionTLS12,
 				},
 				ecdheOk:      true,
 				rsaSignOk:    true,
@@ -1919,16 +1919,17 @@ func TestAESCipherReorderingTLS13(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			hasAESGCMHardwareSupport = tc.serverHasAESGCM
+			pk, _ := ecdh.X25519().GenerateKey(rand.Reader)
 			hs := &serverHandshakeStateTLS13{
 				c: &Conn{
 					config: &Config{},
 					vers:   VersionTLS13,
 				},
-				clientHello: &ClientHelloMsg{
-					CipherSuites:       tc.clientCiphers,
-					SupportedVersions:  []uint16{VersionTLS13},
-					CompressionMethods: []uint8{compressionNone},
-					KeyShares:          []KeyShare{{Group: X25519, Data: curve25519.Basepoint}},
+				clientHello: &clientHelloMsg{
+					cipherSuites:       tc.clientCiphers,
+					supportedVersions:  []uint16{VersionTLS13},
+					compressionMethods: []uint8{compressionNone},
+					keyShares:          []keyShare{{group: X25519, data: pk.PublicKey().Bytes()}},
 				},
 			}
 

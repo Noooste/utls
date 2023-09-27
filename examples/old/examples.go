@@ -5,12 +5,12 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net"
+	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"time"
 
 	tls "github.com/Noooste/utls"
-
 	"golang.org/x/net/http2"
 )
 

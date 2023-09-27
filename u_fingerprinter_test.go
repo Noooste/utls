@@ -160,8 +160,8 @@ func checkUTLSExtensionsEquality(t *testing.T, expected, actual TLSExtension) {
 }
 
 // Conn.vers is sometimes left to zero which is unacceptable to uTLS' SetTLSVers
-// https://github.com/refraction-networking/utls/blob/f7e7360167ed2903ef12898634512b66f8c3aad0/u_conn.go#L564-L566
-// https://github.com/refraction-networking/utls/blob/f7e7360167ed2903ef12898634512b66f8c3aad0/conn.go#L945-L948
+// https://github.com/Noooste/utls/blob/f7e7360167ed2903ef12898634512b66f8c3aad0/u_conn.go#L564-L566
+// https://github.com/Noooste/utls/blob/f7e7360167ed2903ef12898634512b66f8c3aad0/conn.go#L945-L948
 func createMinTLSVersion(vers uint16) uint16 {
 	if vers == 0 {
 		return VersionTLS10
@@ -234,7 +234,8 @@ func checkUTLSFingerPrintClientHello(t *testing.T, clientHelloID ClientHelloID, 
 }
 
 func TestUTLSFingerprintClientHello(t *testing.T) {
-	clientHellosToTest := []ClientHelloID{HelloIOS_11_1, HelloIOS_12_1, HelloRandomized, HelloRandomizedALPN, HelloRandomizedNoALPN}
+	clientHellosToTest := []ClientHelloID{
+		HelloChrome_58, HelloChrome_70, HelloChrome_83, HelloFirefox_55, HelloFirefox_63, HelloIOS_11_1, HelloIOS_12_1, HelloRandomized, HelloRandomizedALPN, HelloRandomizedNoALPN}
 
 	serverNames := []string{"foobar"}
 
@@ -296,7 +297,7 @@ func TestUTLSFingerprintClientHelloAlwaysAddPadding(t *testing.T) {
 	if err != nil {
 		t.Errorf("got error: %v; expected to succeed", err)
 	}
-	specWithPadding, err := utlsIdToSpec(HelloChrome_100)
+	specWithPadding, err := utlsIdToSpec(HelloChrome_83)
 	if err != nil {
 		t.Errorf("got error: %v; expected to succeed", err)
 	}

@@ -12,6 +12,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"runtime/debug"
 	"strings"
 	"testing"
 	"time"
@@ -40,19 +41,19 @@ func (hs *helloSpec) helloName() string {
 }
 
 func TestUTLSMarshalNoOp(t *testing.T) {
-	str := "We rely on ClientHelloMsg.marshal() not doing anything if ClientHelloMsg.raw is set"
+	str := "We rely on clientHelloMsg.marshal() not doing anything if clientHelloMsg.raw is set"
 	uconn := UClient(&net.TCPConn{}, &Config{ServerName: "foobar"}, HelloGolang)
 	msg, _, err := uconn.makeClientHello()
 	if err != nil {
 		t.Errorf("Got error: %s; expected to succeed", err)
 	}
-	msg.Raw = []byte(str)
+	msg.raw = []byte(str)
 	marshalledHello, err := msg.marshal()
 	if err != nil {
-		t.Errorf("ClientHelloMsg.marshal() returned error: %s", err.Error())
+		t.Errorf("clientHelloMsg.marshal() returned error: %s", err.Error())
 	}
 	if strings.Compare(string(marshalledHello), str) != 0 {
-		t.Errorf("ClientHelloMsg.marshal() is not NOOP! Expected to get: %s, got: %s", str, string(marshalledHello))
+		t.Errorf("clientHelloMsg.marshal() is not NOOP! Expected to get: %s, got: %s", str, string(marshalledHello))
 	}
 }
 
@@ -522,6 +523,9 @@ func (test *clientTest) runUTLS(t *testing.T, write bool, hello helloStrategy, o
 	doneChan := make(chan bool)
 	go func() {
 		defer func() {
+			if err := recover(); err != nil {
+				fmt.Printf("panic occurred: %v\n %s\n", err, string(debug.Stack()))
+			}
 			// Give time to the send buffer to drain, to avoid the kernel
 			// sending a RST and cutting off the flow. See Issue 18701.
 			time.Sleep(10 * time.Millisecond)

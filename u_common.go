@@ -19,7 +19,7 @@ import (
 
 // Naming convention:
 // Unsupported things are prefixed with "Fake"
-// Things, supported by tls, but not crypto/tls' are prefixed with "tls"
+// Things, supported by utls, but not crypto/tls' are prefixed with "utls"
 // Supported things, that have changed their ID are prefixed with "Old"
 // Supported but disabled things are prefixed with "Disabled". We will _enable_ them.
 
@@ -34,11 +34,10 @@ const (
 const (
 	extensionNextProtoNeg uint16 = 13172 // not IANA assigned. Removed by crypto/tls since Nov 2019
 
-	utlsExtensionPadding              uint16 = 21
-	utlsExtensionExtendedMasterSecret uint16 = 23    // https://tools.ietf.org/html/rfc7627
-	utlsExtensionCompressCertificate  uint16 = 27    // https://datatracker.ietf.org/doc/html/rfc8879#section-7.1
-	utlsExtensionApplicationSettings  uint16 = 17513 // not IANA assigned
-	utlsFakeExtensionCustom           uint16 = 1234  // not IANA assigned, for ALPS
+	utlsExtensionPadding             uint16 = 21
+	utlsExtensionCompressCertificate uint16 = 27    // https://datatracker.ietf.org/doc/html/rfc8879#section-7.1
+	utlsExtensionApplicationSettings uint16 = 17513 // not IANA assigned
+	utlsFakeExtensionCustom          uint16 = 1234  // not IANA assigned, for ALPS
 
 	// extensions with 'fake' prefix break connection, if server echoes them back
 	fakeExtensionEncryptThenMAC       uint16 = 22
@@ -71,6 +70,19 @@ const (
 
 	// https://docs.microsoft.com/en-us/dotnet/api/system.net.security.tlsciphersuite?view=netcore-3.1
 	FAKE_TLS_ECDHE_ECDSA_WITH_3DES_EDE_CBC_SHA = uint16(0xc008)
+)
+
+const (
+	CurveSECP256R1 CurveID = 0x0017
+	CurveSECP384R1 CurveID = 0x0018
+	CurveSECP521R1 CurveID = 0x0019
+	CurveX25519    CurveID = 0x001d
+
+	FakeCurveFFDHE2048 CurveID = 0x0100
+	FakeCurveFFDHE3072 CurveID = 0x0101
+	FakeCurveFFDHE4096 CurveID = 0x0102
+	FakeCurveFFDHE6144 CurveID = 0x0103
+	FakeCurveFFDHE8192 CurveID = 0x0104
 )
 
 // Other things
@@ -198,7 +210,7 @@ func (chs *ClientHelloSpec) ReadCompressionMethods(compressionMethods []byte) er
 // a byte slice into []TLSExtension.
 //
 // If keepPSK is not set, the PSK extension will cause an error.
-func (chs *ClientHelloSpec) ReadTLSExtensions(b []byte, allowBluntMimicry bool) error {
+func (chs *ClientHelloSpec) ReadTLSExtensions(b []byte, allowBluntMimicry bool, realPSK bool) error {
 	extensions := cryptobyte.String(b)
 	for !extensions.Empty() {
 		var extension uint16
@@ -213,6 +225,16 @@ func (chs *ClientHelloSpec) ReadTLSExtensions(b []byte, allowBluntMimicry bool) 
 		ext := ExtensionFromID(extension)
 		extWriter, ok := ext.(TLSExtensionWriter)
 		if ext != nil && ok { // known extension and implements TLSExtensionWriter properly
+			switch extension {
+			case extensionPreSharedKey:
+				// PSK extension, need to see if we do real or fake PSK
+				if realPSK {
+					extWriter = &UtlsPreSharedKeyExtension{}
+				} else {
+					extWriter = &FakePreSharedKeyExtension{}
+				}
+			}
+
 			if extension == extensionSupportedVersions {
 				chs.TLSVersMin = 0
 				chs.TLSVersMax = 0
@@ -235,13 +257,15 @@ func (chs *ClientHelloSpec) ReadTLSExtensions(b []byte, allowBluntMimicry bool) 
 
 func (chs *ClientHelloSpec) AlwaysAddPadding() {
 	alreadyHasPadding := false
-	for _, ext := range chs.Extensions {
+	for idx, ext := range chs.Extensions {
 		if _, ok := ext.(*UtlsPaddingExtension); ok {
 			alreadyHasPadding = true
 			break
 		}
-		if _, ok := ext.(*FakePreSharedKeyExtension); ok {
-			alreadyHasPadding = true // PSK must be last, so we don't need to add padding
+		if _, ok := ext.(PreSharedKeyExtension); ok {
+			alreadyHasPadding = true // PSK must be last, so we can't append padding after it
+			// instead we will insert padding before PSK
+			chs.Extensions = append(chs.Extensions[:idx], append([]TLSExtension{&UtlsPaddingExtension{GetPaddingLen: BoringPaddingStyle}}, chs.Extensions[idx:]...)...)
 			break
 		}
 	}
@@ -412,7 +436,7 @@ func (chs *ClientHelloSpec) ImportTLSClientHello(data map[string][]byte) error {
 			case utlsExtensionApplicationSettings:
 				// TODO: tlsfingerprint.io should record/provide application settings data
 				extWriter.(*ApplicationSettingsExtension).SupportedProtocols = []string{"h2"}
-			case fakeExtensionPreSharedKey:
+			case extensionPreSharedKey:
 				log.Printf("[Warning] PSK extension added without data")
 			default:
 				if !isGREASEUint16(extType) {
@@ -440,14 +464,20 @@ func (chs *ClientHelloSpec) ImportTLSClientHelloFromJSON(jsonB []byte) error {
 }
 
 // FromRaw converts a ClientHello message in the form of raw bytes into a ClientHelloSpec.
-func (chs *ClientHelloSpec) FromRaw(raw []byte, allowBluntMimicry ...bool) error {
+//
+// ctrlFlags: []bool{bluntMimicry, realPSK}
+func (chs *ClientHelloSpec) FromRaw(raw []byte, ctrlFlags ...bool) error {
 	if chs == nil {
 		return errors.New("cannot unmarshal into nil ClientHelloSpec")
 	}
 
 	var bluntMimicry = false
-	if len(allowBluntMimicry) == 1 {
-		bluntMimicry = allowBluntMimicry[0]
+	var realPSK = false
+	if len(ctrlFlags) > 0 {
+		bluntMimicry = ctrlFlags[0]
+	}
+	if len(ctrlFlags) > 1 {
+		realPSK = ctrlFlags[1]
 	}
 
 	*chs = ClientHelloSpec{} // reset
@@ -514,7 +544,7 @@ func (chs *ClientHelloSpec) FromRaw(raw []byte, allowBluntMimicry ...bool) error
 		return errors.New("unable to read extensions data")
 	}
 
-	if err := chs.ReadTLSExtensions(extensions, bluntMimicry); err != nil {
+	if err := chs.ReadTLSExtensions(extensions, bluntMimicry, realPSK); err != nil {
 		return err
 	}
 
@@ -570,9 +600,17 @@ var (
 	HelloChrome_102         = ClientHelloID{helloChrome, "102", nil, nil}
 	HelloChrome_106_Shuffle = ClientHelloID{helloChrome, "106", nil, nil} // beta: shuffler enabled starting from 106
 
-	// Chrome with PSK: Chrome start sending this ClientHello after doing TLS 1.3 handshake with the same server.
-	HelloChrome_100_PSK      = ClientHelloID{helloChrome, "100_PSK", nil, nil} // beta: PSK extension added. uTLS doesn't fully support PSK. Use at your own risk.
-	HelloChrome_112_PSK_Shuf = ClientHelloID{helloChrome, "112_PSK", nil, nil} // beta: PSK extension added. uTLS doesn't fully support PSK. Use at your own risk.
+	// Chrome w/ PSK: Chrome start sending this ClientHello after doing TLS 1.3 handshake with the same server.
+	// Beta: PSK extension added. However, uTLS doesn't ship with full PSK support.
+	// Use at your own discretion.
+	HelloChrome_100_PSK              = ClientHelloID{helloChrome, "100_PSK", nil, nil}
+	HelloChrome_112_PSK_Shuf         = ClientHelloID{helloChrome, "112_PSK", nil, nil}
+	HelloChrome_114_Padding_PSK_Shuf = ClientHelloID{helloChrome, "114_PSK", nil, nil}
+
+	// Chrome w/ Post-Quantum Key Agreement
+	// Beta: PQ extension added. However, uTLS doesn't ship with full PQ support. Use at your own discretion.
+	HelloChrome_115_PQ     = ClientHelloID{helloChrome, "115_PQ", nil, nil}
+	HelloChrome_115_PQ_PSK = ClientHelloID{helloChrome, "115_PQ_PSK", nil, nil}
 
 	HelloIOS_Auto = HelloIOS_14
 	HelloIOS_11_1 = ClientHelloID{helloIOS, "111", nil, nil} // legacy "111" means 11.1
@@ -672,9 +710,9 @@ func init() {
 	}...)
 }
 
-// EnableWeakCiphers allows tls connections to continue in some cases, when weak cipher was chosen.
+// EnableWeakCiphers allows utls connections to continue in some cases, when weak cipher was chosen.
 // This provides better compatibility with servers on the web, but weakens security. Feel free
-// to use this option if you establish additional security connection inside of tls connection.
+// to use this option if you establish additional secure connection inside of utls connection.
 // This option does not change the shape of parrots (i.e. same ciphers will be offered either way).
 // Must be called before establishing any connections.
 func EnableWeakCiphers() {
@@ -687,4 +725,62 @@ func EnableWeakCiphers() {
 		{DISABLED_TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384, 32, 48, 16, ecdheRSAKA,
 			suiteECDHE | suiteTLS12 | suiteSHA384, cipherAES, utlsMacSHA384, nil},
 	}...)
+}
+
+func mapSlice[T any, U any](slice []T, transform func(T) U) []U {
+	newSlice := make([]U, 0, len(slice))
+	for _, t := range slice {
+		newSlice = append(newSlice, transform(t))
+	}
+	return newSlice
+}
+
+func panicOnNil(caller string, params ...any) {
+	for i, p := range params {
+		if p == nil {
+			panic(fmt.Sprintf("tls: %s failed: the [%d] parameter is nil", caller, i))
+		}
+	}
+}
+
+func anyTrue[T any](slice []T, predicate func(i int, t *T) bool) bool {
+	for i := 0; i < len(slice); i++ {
+		if predicate(i, &slice[i]) {
+			return true
+		}
+	}
+	return false
+}
+
+func allTrue[T any](slice []T, predicate func(i int, t *T) bool) bool {
+	for i := 0; i < len(slice); i++ {
+		if !predicate(i, &slice[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func uAssert(condition bool, msg string) {
+	if !condition {
+		panic(msg)
+	}
+}
+
+func sliceEq[T comparable](sliceA []T, sliceB []T) bool {
+	if len(sliceA) != len(sliceB) {
+		return false
+	}
+	for i := 0; i < len(sliceA); i++ {
+		if sliceA[i] != sliceB[i] {
+			return false
+		}
+	}
+	return true
+}
+
+type Initializable interface {
+	// IsInitialized returns a boolean indicating whether the extension has been initialized.
+	// If false is returned, utls will initialize the extension.
+	IsInitialized() bool
 }

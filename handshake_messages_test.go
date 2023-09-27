@@ -6,7 +6,9 @@ package tls
 
 import (
 	"bytes"
+	"crypto/x509"
 	"encoding/hex"
+	"math"
 	"math/rand"
 	"reflect"
 	"strings"
@@ -15,8 +17,8 @@ import (
 	"time"
 )
 
-var tests = []any{
-	&ClientHelloMsg{},
+var tests = []handshakeMessage{
+	&clientHelloMsg{},
 	&serverHelloMsg{},
 	&finishedMsg{},
 
@@ -28,15 +30,13 @@ var tests = []any{
 	&certificateStatusMsg{},
 	&clientKeyExchangeMsg{},
 	&newSessionTicketMsg{},
-	&sessionState{},
-	&sessionStateTLS13{},
 	&encryptedExtensionsMsg{},
 	&endOfEarlyDataMsg{},
 	&keyUpdateMsg{},
 	&newSessionTicketMsgTLS13{},
 	&certificateRequestMsgTLS13{},
 	&certificateMsgTLS13{},
-	&utlsCompressedCertificateMsg{}, // [UTLS]
+	&SessionState{},
 }
 
 func mustMarshal(t *testing.T, msg handshakeMessage) []byte {
@@ -51,8 +51,8 @@ func mustMarshal(t *testing.T, msg handshakeMessage) []byte {
 func TestMarshalUnmarshal(t *testing.T) {
 	rand := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	for i, iface := range tests {
-		ty := reflect.ValueOf(iface).Type()
+	for i, m := range tests {
+		ty := reflect.ValueOf(m).Type()
 
 		n := 100
 		if testing.Short() {
@@ -67,15 +67,18 @@ func TestMarshalUnmarshal(t *testing.T) {
 
 			m1 := v.Interface().(handshakeMessage)
 			marshaled := mustMarshal(t, m1)
-			m2 := iface.(handshakeMessage)
-			if !m2.unmarshal(marshaled) {
+			if !m.unmarshal(marshaled) {
 				t.Errorf("#%d failed to unmarshal %#v %x", i, m1, marshaled)
 				break
 			}
-			m2.marshal() // to fill interface{} marshal cache in the message
+			m.marshal() // to fill any marshal cache in the message
 
-			if !reflect.DeepEqual(m1, m2) {
-				t.Errorf("#%d got:%#v want:%#v %x", i, m2, m1, marshaled)
+			if m, ok := m.(*SessionState); ok {
+				m.activeCertHandles = nil
+			}
+
+			if !reflect.DeepEqual(m1, m) {
+				t.Errorf("#%d got:%#v want:%#v %x", i, m, m1, marshaled)
 				break
 			}
 
@@ -86,7 +89,7 @@ func TestMarshalUnmarshal(t *testing.T) {
 				// data is optional and the length of the
 				// Finished varies across versions.
 				for j := 0; j < len(marshaled); j++ {
-					if m2.unmarshal(marshaled[0:j]) {
+					if m.unmarshal(marshaled[0:j]) {
 						t.Errorf("#%d unmarshaled a prefix of length %d of %#v", i, j, m1)
 						break
 					}
@@ -98,11 +101,9 @@ func TestMarshalUnmarshal(t *testing.T) {
 
 func TestFuzz(t *testing.T) {
 	rand := rand.New(rand.NewSource(0))
-	for _, iface := range tests {
-		m := iface.(handshakeMessage)
-
+	for _, m := range tests {
 		for j := 0; j < 1000; j++ {
-			len := rand.Intn(100)
+			len := rand.Intn(1000)
 			bytes := randomBytes(len, rand)
 			// This just looks for crashes due to bounds errors etc.
 			m.unmarshal(bytes)
@@ -123,83 +124,89 @@ func randomString(n int, rand *rand.Rand) string {
 	return string(b)
 }
 
-func (*ClientHelloMsg) Generate(rand *rand.Rand, size int) reflect.Value {
-	m := &ClientHelloMsg{}
-	m.Vers = uint16(rand.Intn(65536))
-	m.Random = randomBytes(32, rand)
-	m.SessionId = randomBytes(rand.Intn(32), rand)
-	m.CipherSuites = make([]uint16, rand.Intn(63)+1)
-	for i := 0; i < len(m.CipherSuites); i++ {
+func (*clientHelloMsg) Generate(rand *rand.Rand, size int) reflect.Value {
+	m := &clientHelloMsg{}
+	m.vers = uint16(rand.Intn(65536))
+	m.random = randomBytes(32, rand)
+	m.sessionId = randomBytes(rand.Intn(32), rand)
+	m.cipherSuites = make([]uint16, rand.Intn(63)+1)
+	for i := 0; i < len(m.cipherSuites); i++ {
 		cs := uint16(rand.Int31())
 		if cs == scsvRenegotiation {
 			cs += 1
 		}
-		m.CipherSuites[i] = cs
+		m.cipherSuites[i] = cs
 	}
-	m.CompressionMethods = randomBytes(rand.Intn(63)+1, rand)
+	m.compressionMethods = randomBytes(rand.Intn(63)+1, rand)
 	if rand.Intn(10) > 5 {
-		m.ServerName = randomString(rand.Intn(255), rand)
-		for strings.HasSuffix(m.ServerName, ".") {
-			m.ServerName = m.ServerName[:len(m.ServerName)-1]
+		m.serverName = randomString(rand.Intn(255), rand)
+		for strings.HasSuffix(m.serverName, ".") {
+			m.serverName = m.serverName[:len(m.serverName)-1]
 		}
 	}
-	m.OcspStapling = rand.Intn(10) > 5
-	m.SupportedPoints = randomBytes(rand.Intn(5)+1, rand)
-	m.SupportedCurves = make([]CurveID, rand.Intn(5)+1)
-	for i := range m.SupportedCurves {
-		m.SupportedCurves[i] = CurveID(rand.Intn(30000) + 1)
+	m.ocspStapling = rand.Intn(10) > 5
+	m.supportedPoints = randomBytes(rand.Intn(5)+1, rand)
+	m.supportedCurves = make([]CurveID, rand.Intn(5)+1)
+	for i := range m.supportedCurves {
+		m.supportedCurves[i] = CurveID(rand.Intn(30000) + 1)
 	}
 	if rand.Intn(10) > 5 {
-		m.TicketSupported = true
+		m.ticketSupported = true
 		if rand.Intn(10) > 5 {
-			m.SessionTicket = randomBytes(rand.Intn(300), rand)
+			m.sessionTicket = randomBytes(rand.Intn(300), rand)
 		} else {
-			m.SessionTicket = make([]byte, 0)
+			m.sessionTicket = make([]byte, 0)
 		}
 	}
 	if rand.Intn(10) > 5 {
-		m.SupportedSignatureAlgorithms = supportedSignatureAlgorithms()
+		m.supportedSignatureAlgorithms = supportedSignatureAlgorithms()
 	}
 	if rand.Intn(10) > 5 {
-		m.SupportedSignatureAlgorithmsCert = supportedSignatureAlgorithms()
+		m.supportedSignatureAlgorithmsCert = supportedSignatureAlgorithms()
 	}
 	for i := 0; i < rand.Intn(5); i++ {
-		m.AlpnProtocols = append(m.AlpnProtocols, randomString(rand.Intn(20)+1, rand))
+		m.alpnProtocols = append(m.alpnProtocols, randomString(rand.Intn(20)+1, rand))
 	}
 	if rand.Intn(10) > 5 {
-		m.Scts = true
+		m.scts = true
 	}
 	if rand.Intn(10) > 5 {
-		m.SecureRenegotiationSupported = true
-		m.SecureRenegotiation = randomBytes(rand.Intn(50)+1, rand)
+		m.secureRenegotiationSupported = true
+		m.secureRenegotiation = randomBytes(rand.Intn(50)+1, rand)
+	}
+	if rand.Intn(10) > 5 {
+		m.extendedMasterSecret = true
 	}
 	for i := 0; i < rand.Intn(5); i++ {
-		m.SupportedVersions = append(m.SupportedVersions, uint16(rand.Intn(0xffff)+1))
+		m.supportedVersions = append(m.supportedVersions, uint16(rand.Intn(0xffff)+1))
 	}
 	if rand.Intn(10) > 5 {
-		m.Cookie = randomBytes(rand.Intn(500)+1, rand)
+		m.cookie = randomBytes(rand.Intn(500)+1, rand)
 	}
 	for i := 0; i < rand.Intn(5); i++ {
-		var ks KeyShare
-		ks.Group = CurveID(rand.Intn(30000) + 1)
-		ks.Data = randomBytes(rand.Intn(200)+1, rand)
-		m.KeyShares = append(m.KeyShares, ks)
+		var ks keyShare
+		ks.group = CurveID(rand.Intn(30000) + 1)
+		ks.data = randomBytes(rand.Intn(200)+1, rand)
+		m.keyShares = append(m.keyShares, ks)
 	}
 	switch rand.Intn(3) {
 	case 1:
-		m.PskModes = []uint8{pskModeDHE}
+		m.pskModes = []uint8{pskModeDHE}
 	case 2:
-		m.PskModes = []uint8{pskModeDHE, pskModePlain}
+		m.pskModes = []uint8{pskModeDHE, pskModePlain}
 	}
 	for i := 0; i < rand.Intn(5); i++ {
 		var psk pskIdentity
 		psk.obfuscatedTicketAge = uint32(rand.Intn(500000))
 		psk.label = randomBytes(rand.Intn(500)+1, rand)
-		m.PskIdentities = append(m.PskIdentities, psk)
-		m.PskBinders = append(m.PskBinders, randomBytes(rand.Intn(50)+32, rand))
+		m.pskIdentities = append(m.pskIdentities, psk)
+		m.pskBinders = append(m.pskBinders, randomBytes(rand.Intn(50)+32, rand))
 	}
 	if rand.Intn(10) > 5 {
-		m.EarlyData = true
+		m.quicTransportParameters = randomBytes(rand.Intn(500), rand)
+	}
+	if rand.Intn(10) > 5 {
+		m.earlyData = true
 	}
 
 	return reflect.ValueOf(m)
@@ -233,6 +240,9 @@ func (*serverHelloMsg) Generate(rand *rand.Rand, size int) reflect.Value {
 		m.secureRenegotiation = randomBytes(rand.Intn(50)+1, rand)
 	}
 	if rand.Intn(10) > 5 {
+		m.extendedMasterSecret = true
+	}
+	if rand.Intn(10) > 5 {
 		m.supportedVersion = uint16(rand.Intn(0xffff) + 1)
 	}
 	if rand.Intn(10) > 5 {
@@ -240,8 +250,8 @@ func (*serverHelloMsg) Generate(rand *rand.Rand, size int) reflect.Value {
 	}
 	if rand.Intn(10) > 5 {
 		for i := 0; i < rand.Intn(5); i++ {
-			m.serverShare.Group = CurveID(rand.Intn(30000) + 1)
-			m.serverShare.Data = randomBytes(rand.Intn(200)+1, rand)
+			m.serverShare.group = CurveID(rand.Intn(30000) + 1)
+			m.serverShare.data = randomBytes(rand.Intn(200)+1, rand)
 		}
 	} else if rand.Intn(10) > 5 {
 		m.selectedGroup = CurveID(rand.Intn(30000) + 1)
@@ -259,6 +269,9 @@ func (*encryptedExtensionsMsg) Generate(rand *rand.Rand, size int) reflect.Value
 
 	if rand.Intn(10) > 5 {
 		m.alpnProtocol = randomString(rand.Intn(32)+1, rand)
+	}
+	if rand.Intn(10) > 5 {
+		m.earlyData = true
 	}
 
 	return reflect.ValueOf(m)
@@ -315,37 +328,86 @@ func (*newSessionTicketMsg) Generate(rand *rand.Rand, size int) reflect.Value {
 	return reflect.ValueOf(m)
 }
 
-func (*sessionState) Generate(rand *rand.Rand, size int) reflect.Value {
-	s := &sessionState{}
-	s.vers = uint16(rand.Intn(10000))
-	s.cipherSuite = uint16(rand.Intn(10000))
-	s.masterSecret = randomBytes(rand.Intn(100)+1, rand)
+var sessionTestCerts []*x509.Certificate
+
+func init() {
+	cert, err := x509.ParseCertificate(testRSACertificate)
+	if err != nil {
+		panic(err)
+	}
+	sessionTestCerts = append(sessionTestCerts, cert)
+	cert, err = x509.ParseCertificate(testRSACertificateIssuer)
+	if err != nil {
+		panic(err)
+	}
+	sessionTestCerts = append(sessionTestCerts, cert)
+}
+
+func (*SessionState) Generate(rand *rand.Rand, size int) reflect.Value {
+	s := &SessionState{}
+	isTLS13 := rand.Intn(10) > 5
+	if isTLS13 {
+		s.version = VersionTLS13
+	} else {
+		s.version = uint16(rand.Intn(VersionTLS13))
+	}
+	s.isClient = rand.Intn(10) > 5
+	s.cipherSuite = uint16(rand.Intn(math.MaxUint16))
 	s.createdAt = uint64(rand.Int63())
-	for i := 0; i < rand.Intn(20); i++ {
-		s.certificates = append(s.certificates, randomBytes(rand.Intn(500)+1, rand))
+	s.secret = randomBytes(rand.Intn(100)+1, rand)
+	for n, i := rand.Intn(3), 0; i < n; i++ {
+		s.Extra = append(s.Extra, randomBytes(rand.Intn(100), rand))
+	}
+	if rand.Intn(10) > 5 {
+		s.EarlyData = true
+	}
+	if rand.Intn(10) > 5 {
+		s.extMasterSecret = true
+	}
+	if s.isClient || rand.Intn(10) > 5 {
+		if rand.Intn(10) > 5 {
+			s.peerCertificates = sessionTestCerts
+		} else {
+			s.peerCertificates = sessionTestCerts[:1]
+		}
+	}
+	if rand.Intn(10) > 5 && s.peerCertificates != nil {
+		s.ocspResponse = randomBytes(rand.Intn(100)+1, rand)
+	}
+	if rand.Intn(10) > 5 && s.peerCertificates != nil {
+		for i := 0; i < rand.Intn(2)+1; i++ {
+			s.scts = append(s.scts, randomBytes(rand.Intn(500)+1, rand))
+		}
+	}
+	if len(s.peerCertificates) > 0 {
+		for i := 0; i < rand.Intn(3); i++ {
+			if rand.Intn(10) > 5 {
+				s.verifiedChains = append(s.verifiedChains, s.peerCertificates)
+			} else {
+				s.verifiedChains = append(s.verifiedChains, s.peerCertificates[:1])
+			}
+		}
+	}
+	if rand.Intn(10) > 5 && s.EarlyData {
+		s.alpnProtocol = string(randomBytes(rand.Intn(10), rand))
+	}
+	if s.isClient {
+		if isTLS13 {
+			s.useBy = uint64(rand.Int63())
+			s.ageAdd = uint32(rand.Int63() & math.MaxUint32)
+		}
 	}
 	return reflect.ValueOf(s)
 }
 
-func (*sessionStateTLS13) Generate(rand *rand.Rand, size int) reflect.Value {
-	s := &sessionStateTLS13{}
-	s.cipherSuite = uint16(rand.Intn(10000))
-	s.resumptionSecret = randomBytes(rand.Intn(100)+1, rand)
-	s.createdAt = uint64(rand.Int63())
-	for i := 0; i < rand.Intn(2)+1; i++ {
-		s.certificate.Certificate = append(
-			s.certificate.Certificate, randomBytes(rand.Intn(500)+1, rand))
+func (s *SessionState) marshal() ([]byte, error) { return s.Bytes() }
+func (s *SessionState) unmarshal(b []byte) bool {
+	ss, err := ParseSessionState(b)
+	if err != nil {
+		return false
 	}
-	if rand.Intn(10) > 5 {
-		s.certificate.OCSPStaple = randomBytes(rand.Intn(100)+1, rand)
-	}
-	if rand.Intn(10) > 5 {
-		for i := 0; i < rand.Intn(2)+1; i++ {
-			s.certificate.SignedCertificateTimestamps = append(
-				s.certificate.SignedCertificateTimestamps, randomBytes(rand.Intn(500)+1, rand))
-		}
-	}
-	return reflect.ValueOf(s)
+	*s = *ss
+	return true
 }
 
 func (*endOfEarlyDataMsg) Generate(rand *rand.Rand, size int) reflect.Value {
@@ -489,7 +551,7 @@ func TestRejectDuplicateExtensions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to decode test ClientHello: %s", err)
 	}
-	var clientHelloCopy ClientHelloMsg
+	var clientHelloCopy clientHelloMsg
 	if clientHelloCopy.unmarshal(clientHelloBytes) {
 		t.Error("Unmarshaled ClientHello with duplicate extensions")
 	}

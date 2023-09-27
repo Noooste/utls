@@ -8,11 +8,10 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"log"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"time"
-
-	http "github.com/refraction-networking/utls"
 )
 
 // zeroSource is an io.Reader that returns an unlimited number of zero bytes.
