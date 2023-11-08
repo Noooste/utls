@@ -38,7 +38,16 @@ func (csc *ClientSessionCache) Put(sessionKey string, cs *tls.ClientSessionState
 	}
 }
 
-func runResumptionCheck(helloID tls.ClientHelloID, serverAddr string, retry int, verbose bool) {
+type ResumptionType int
+
+const (
+	noResumption     ResumptionType = 0
+	pskResumption    ResumptionType = 1
+	ticketResumption ResumptionType = 2
+)
+
+func runResumptionCheck(helloID tls.ClientHelloID, getCustomSpec func() *tls.ClientHelloSpec, expectResumption ResumptionType, serverAddr string, retry int, verbose bool) {
+	fmt.Printf("checking: hello [%s], expectResumption [%v], serverAddr [%s]\n", helloID.Client, expectResumption, serverAddr)
 	csc := NewClientSessionCache()
 	tcpConn, err := net.Dial("tcp", serverAddr)
 	if err != nil {
@@ -54,6 +63,10 @@ func runResumptionCheck(helloID tls.ClientHelloID, serverAddr string, retry int,
 		ClientSessionCache: csc, // set this so session tickets will be saved
 		OmitEmptyPsk:       true,
 	}, helloID)
+
+	if getCustomSpec != nil {
+		tlsConn.ApplyPreset(getCustomSpec())
+	}
 
 	// HS
 	err = tlsConn.Handshake()
@@ -108,6 +121,10 @@ func runResumptionCheck(helloID tls.ClientHelloID, serverAddr string, retry int,
 			OmitEmptyPsk:       true,
 		}, helloID)
 
+		if getCustomSpec != nil {
+			tlsConnPSK.ApplyPreset(getCustomSpec())
+		}
+
 		// HS
 		err = tlsConnPSK.Handshake()
 		if verbose {
@@ -133,27 +150,16 @@ func runResumptionCheck(helloID tls.ClientHelloID, serverAddr string, retry int,
 
 			if tlsVer == tls.VersionTLS13 && tlsConnPSK.HandshakeState.State13.UsingPSK {
 				fmt.Println("[PSK used]")
-				return
+				resumption = pskResumption
+				break
 			} else if tlsVer == tls.VersionTLS12 && tlsConnPSK.DidTls12Resume() {
 				fmt.Println("[session ticket used]")
-				return
+				resumption = ticketResumption
+				break
 			}
 		}
 		time.Sleep(700 * time.Millisecond)
 	}
 	panic(fmt.Sprintf("PSK or session ticket not used for a resumption session, server %s, helloID: %s", serverAddr, helloID.Client))
-}
-
-func main() {
-	tls13Url := "www.microsoft.com:443"
-	tls12Url1 := "spocs.getpocket.com:443"
-	tls12Url2 := "marketplace.visualstudio.com:443"
-	runResumptionCheck(tls.HelloChrome_100_PSK, tls13Url, 1, false) // psk + utls
-	runResumptionCheck(tls.HelloGolang, tls13Url, 1, false)         // psk + crypto/tls
-
-	runResumptionCheck(tls.HelloChrome_100_PSK, tls12Url1, 10, false) // session ticket + utls
-	runResumptionCheck(tls.HelloGolang, tls12Url1, 10, false)         // session ticket + crypto/tls
-	runResumptionCheck(tls.HelloChrome_100_PSK, tls12Url2, 10, false) // session ticket + utls
-	runResumptionCheck(tls.HelloGolang, tls12Url2, 10, false)         // session ticket + crypto/tls
 
 }
