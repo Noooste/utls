@@ -587,7 +587,7 @@ var (
 	HelloRandomizedNoALPN = ClientHelloID{helloRandomizedNoALPN, helloAutoVers, nil, nil}
 
 	// The rest will will parrot given browser.
-	HelloFirefox_Auto = HelloFirefox_105
+	HelloFirefox_Auto = HelloFirefox_120
 	HelloFirefox_55   = ClientHelloID{helloFirefox, "55", nil, nil}
 	HelloFirefox_56   = ClientHelloID{helloFirefox, "56", nil, nil}
 	HelloFirefox_63   = ClientHelloID{helloFirefox, "63", nil, nil}
@@ -597,7 +597,7 @@ var (
 	HelloFirefox_105  = ClientHelloID{helloFirefox, "105", nil, nil}
 	HelloFirefox_120  = ClientHelloID{helloFirefox, "120", nil, nil}
 
-	HelloChrome_Auto        = HelloChrome_106_Shuffle
+	HelloChrome_Auto        = HelloChrome_120
 	HelloChrome_58          = ClientHelloID{helloChrome, "58", nil, nil}
 	HelloChrome_62          = ClientHelloID{helloChrome, "62", nil, nil}
 	HelloChrome_70          = ClientHelloID{helloChrome, "70", nil, nil}
@@ -607,7 +607,7 @@ var (
 	HelloChrome_96          = ClientHelloID{helloChrome, "96", nil, nil}
 	HelloChrome_100         = ClientHelloID{helloChrome, "100", nil, nil}
 	HelloChrome_102         = ClientHelloID{helloChrome, "102", nil, nil}
-	HelloChrome_106_Shuffle = ClientHelloID{helloChrome, "106", nil, nil} // beta: shuffler enabled starting from 106
+	HelloChrome_106_Shuffle = ClientHelloID{helloChrome, "106", nil, nil} // TLS Extension shuffler enabled starting from 106
 
 	// Chrome w/ PSK: Chrome start sending this ClientHello after doing TLS 1.3 handshake with the same server.
 	// Beta: PSK extension added. However, uTLS doesn't ship with full PSK support.
@@ -621,8 +621,10 @@ var (
 	HelloChrome_115_PQ     = ClientHelloID{helloChrome, "115_PQ", nil, nil}
 	HelloChrome_115_PQ_PSK = ClientHelloID{helloChrome, "115_PQ_PSK", nil, nil}
 
-	// Chrome w/ Post-Quantum Key Agreement and Encrypted ClientHello
+	// Chrome ECH
 	HelloChrome_120 = ClientHelloID{helloChrome, "120", nil, nil}
+	// Chrome w/ Post-Quantum Key Agreement and Encrypted ClientHello
+	HelloChrome_120_PQ = ClientHelloID{helloChrome, "120_PQ", nil, nil}
 
 	HelloIOS_Auto = HelloIOS_14
 	HelloIOS_11_1 = ClientHelloID{helloIOS, "111", nil, nil} // legacy "111" means 11.1
