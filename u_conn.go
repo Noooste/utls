@@ -331,8 +331,11 @@ func (c *UConn) handshakeContext(ctx context.Context) (ret error) {
 			select {
 			case <-handshakeCtx.Done():
 				// Close the connection, discarding the error
-				_ = c.conn.Close()
+				if c.conn != nil {
+					_ = c.conn.Close()
+				}
 				interruptRes <- handshakeCtx.Err()
+
 			case <-done:
 				interruptRes <- nil
 			}
