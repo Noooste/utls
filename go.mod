@@ -2,8 +2,6 @@ module github.com/Noooste/utls
 
 go 1.22.0
 
-toolchain go1.23.3
-
 retract (
 	v1.4.1 // #218
 	v1.4.0 // #218 panic on saveSessionTicket
