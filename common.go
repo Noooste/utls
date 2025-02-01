@@ -853,6 +853,8 @@ type Config struct {
 	//
 	// If GREASE ECH extension is present, this field will be ignored.
 	ECHConfigs []ECHConfig // [uTLS]
+
+	ClientHelloSpec *ClientHelloSpec // [uTLS]
 }
 
 const (
