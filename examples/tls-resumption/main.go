@@ -163,3 +163,4 @@ func runResumptionCheck(helloID tls.ClientHelloID, getCustomSpec func() *tls.Cli
 	panic(fmt.Sprintf("PSK or session ticket not used for a resumption session, server %s, helloID: %s", serverAddr, helloID.Client))
 
 }
+git
