@@ -12,9 +12,9 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/Noooste/utls/internal/hpke"
 	"github.com/andybalholm/brotli"
 	"github.com/klauspost/compress/zstd"
-	"github.com/refraction-networking/utls/internal/hpke"
 )
 
 // This function is called by (*clientHandshakeStateTLS13).readServerCertificate()

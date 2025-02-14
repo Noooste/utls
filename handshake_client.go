@@ -21,11 +21,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/refraction-networking/utls/internal/hpke"
+	"github.com/Noooste/utls/internal/hpke"
 
-	"github.com/refraction-networking/utls/internal/byteorder"
+	"github.com/Noooste/utls/internal/byteorder"
 
-	"github.com/refraction-networking/utls/internal/mlkem768"
+	"github.com/Noooste/utls/internal/mlkem768"
 
 	circlSign "github.com/cloudflare/circl/sign"
 )

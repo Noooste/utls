@@ -8,7 +8,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/refraction-networking/utls/internal/hpke"
+	"github.com/Noooste/utls/internal/hpke"
 
 	"golang.org/x/crypto/cryptobyte"
 )

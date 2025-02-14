@@ -12,9 +12,9 @@ import (
 	"hash"
 	"time"
 
+	"github.com/Noooste/utls/internal/mlkem768"
 	"github.com/cloudflare/circl/kem"
 	"github.com/cloudflare/circl/kem/hybrid"
-	"github.com/refraction-networking/utls/internal/mlkem768"
 )
 
 // ClientHandshakeState includes both TLS 1.3-only and TLS 1.2-only states,
