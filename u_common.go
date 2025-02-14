@@ -87,12 +87,6 @@ const (
 	FakeCurveFFDHE8192 CurveID = 0x0104
 )
 
-const (
-	FakeCurveX25519Kyber512Draft00    CurveID = 0xfe30
-	FakeCurveX25519Kyber768Draft00Old CurveID = 0xfe31
-	FakeCurveP256Kyber768Draft00      CurveID = 0xfe32
-)
-
 // Other things
 const (
 	fakeRecordSizeLimit uint16 = 0x001c
@@ -631,6 +625,8 @@ var (
 	HelloChrome_120 = ClientHelloID{helloChrome, "120", nil, nil}
 	// Chrome w/ Post-Quantum Key Agreement and Encrypted ClientHello
 	HelloChrome_120_PQ = ClientHelloID{helloChrome, "120_PQ", nil, nil}
+	// Chrome w/ ML-KEM curve
+	HelloChrome_131 = ClientHelloID{helloChrome, "131", nil, nil}
 
 	HelloIOS_Auto = HelloIOS_14
 	HelloIOS_11_1 = ClientHelloID{helloIOS, "111", nil, nil} // legacy "111" means 11.1
