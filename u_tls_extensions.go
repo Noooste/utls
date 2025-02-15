@@ -69,6 +69,8 @@ func ExtensionFromID(id uint16) TLSExtension {
 		return &QUICTransportParametersExtension{}
 	case extensionNextProtoNeg:
 		return &NPNExtension{}
+	case utlsExtensionOldApplicationSettings:
+		return &OldApplicationSettingsExtension{}
 	case utlsExtensionApplicationSettings:
 		return &ApplicationSettingsExtension{}
 	case fakeOldExtensionChannelID:
@@ -679,6 +681,90 @@ func (e *ALPNExtension) Write(b []byte) (int, error) {
 
 	}
 	e.AlpnProtocols = alpnProtocols
+	return fullLen, nil
+}
+
+// OldApplicationSettingsExtension represents the TLS ALPS extension.
+// At the time of this writing, this extension is currently a draft:
+// https://datatracker.ietf.org/doc/html/draft-vvv-tls-alps-01
+type OldApplicationSettingsExtension struct {
+	SupportedProtocols []string
+}
+
+func (e *OldApplicationSettingsExtension) writeToUConn(uc *UConn) error {
+	return nil
+}
+
+func (e *OldApplicationSettingsExtension) Len() int {
+	bLen := 2 + 2 + 2 // Type + Length + ALPS Extension length
+	for _, s := range e.SupportedProtocols {
+		bLen += 1 + len(s) // Supported ALPN Length + actual length of protocol
+	}
+	return bLen
+}
+
+func (e *OldApplicationSettingsExtension) Read(b []byte) (int, error) {
+	if len(b) < e.Len() {
+		return 0, io.ErrShortBuffer
+	}
+
+	// Read Type.
+	b[0] = byte(utlsExtensionOldApplicationSettings >> 8)   // hex: 44 dec: 68
+	b[1] = byte(utlsExtensionOldApplicationSettings & 0xff) // hex: 69 dec: 105
+
+	lengths := b[2:] // get the remaining buffer without Type
+	b = b[6:]        // set the buffer to the buffer without Type, Length and ALPS Extension Length (so only the Supported ALPN list remains)
+
+	stringsLength := 0
+	for _, s := range e.SupportedProtocols {
+		l := len(s)            // Supported ALPN Length
+		b[0] = byte(l)         // Supported ALPN Length in bytes hex: 02 dec: 2
+		copy(b[1:], s)         // copy the Supported ALPN as bytes to the buffer
+		b = b[1+l:]            // set the buffer to the buffer without the Supported ALPN Length and Supported ALPN (so we can continue to the next protocol in this loop)
+		stringsLength += 1 + l // Supported ALPN Length (the field itself) + Supported ALPN Length (the value)
+	}
+
+	lengths[2] = byte(stringsLength >> 8) // ALPS Extension Length hex: 00 dec: 0
+	lengths[3] = byte(stringsLength)      // ALPS Extension Length hex: 03 dec: 3
+	stringsLength += 2                    // plus ALPS Extension Length field length
+	lengths[0] = byte(stringsLength >> 8) // Length hex:00 dec: 0
+	lengths[1] = byte(stringsLength)      // Length hex: 05 dec: 5
+
+	return e.Len(), io.EOF
+}
+
+func (e *OldApplicationSettingsExtension) UnmarshalJSON(b []byte) error {
+	var applicationSettingsSupport struct {
+		SupportedProtocols []string `json:"supported_protocols"`
+	}
+
+	if err := json.Unmarshal(b, &applicationSettingsSupport); err != nil {
+		return err
+	}
+
+	e.SupportedProtocols = applicationSettingsSupport.SupportedProtocols
+	return nil
+}
+
+// Write implementation copied from ALPNExtension.Write
+func (e *OldApplicationSettingsExtension) Write(b []byte) (int, error) {
+	fullLen := len(b)
+	extData := cryptobyte.String(b)
+	// https://datatracker.ietf.org/doc/html/draft-vvv-tls-alps-01
+	var protoList cryptobyte.String
+	if !extData.ReadUint16LengthPrefixed(&protoList) || protoList.Empty() {
+		return 0, errors.New("unable to read ALPN extension data")
+	}
+	alpnProtocols := []string{}
+	for !protoList.Empty() {
+		var proto cryptobyte.String
+		if !protoList.ReadUint8LengthPrefixed(&proto) || proto.Empty() {
+			return 0, errors.New("unable to read ALPN extension data")
+		}
+		alpnProtocols = append(alpnProtocols, string(proto))
+
+	}
+	e.SupportedProtocols = alpnProtocols
 	return fullLen, nil
 }
 

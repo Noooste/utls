@@ -62,7 +62,7 @@ type utlsEncryptedExtensionsMsgExtraFields struct {
 
 func (m *encryptedExtensionsMsg) utlsUnmarshal(extension uint16, extData cryptobyte.String) bool {
 	switch extension {
-	case utlsExtensionApplicationSettings:
+	case utlsExtensionOldApplicationSettings, utlsExtensionApplicationSettings:
 		m.utls.hasApplicationSettings = true
 		m.utls.applicationSettings = []byte(extData)
 	case utlsExtensionECH:
@@ -129,7 +129,7 @@ func (m *utlsClientEncryptedExtensionsMsg) unmarshal(data []byte) bool {
 		}
 
 		switch extension {
-		case utlsExtensionApplicationSettings:
+		case utlsExtensionOldApplicationSettings, utlsExtensionApplicationSettings:
 			m.hasApplicationSettings = true
 			m.applicationSettings = []byte(extData)
 		default:

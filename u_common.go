@@ -34,12 +34,13 @@ const (
 const (
 	extensionNextProtoNeg uint16 = 13172 // not IANA assigned. Removed by crypto/tls since Nov 2019
 
-	utlsExtensionPadding             uint16 = 21
-	utlsExtensionCompressCertificate uint16 = 27     // https://datatracker.ietf.org/doc/html/rfc8879#section-7.1
-	utlsExtensionApplicationSettings uint16 = 17613  // not IANA assigned
-	utlsFakeExtensionCustom          uint16 = 1234   // not IANA assigned, for ALPS
-	utlsExtensionECH                 uint16 = 0xfe0d // draft-ietf-tls-esni-17
-	utlsExtensionECHOuterExtensions  uint16 = 0xfd00 // draft-ietf-tls-esni-17
+	utlsExtensionPadding                uint16 = 21
+	utlsExtensionCompressCertificate    uint16 = 27     // https://datatracker.ietf.org/doc/html/rfc8879#section-7.1
+	utlsExtensionOldApplicationSettings uint16 = 17513  // not IANA assigned
+	utlsExtensionApplicationSettings    uint16 = 17613  // not IANA assigned
+	utlsFakeExtensionCustom             uint16 = 1234   // not IANA assigned, for ALPS
+	utlsExtensionECH                    uint16 = 0xfe0d // draft-ietf-tls-esni-17
+	utlsExtensionECHOuterExtensions     uint16 = 0xfd00 // draft-ietf-tls-esni-17
 
 	// extensions with 'fake' prefix break connection, if server echoes them back
 	fakeExtensionEncryptThenMAC       uint16 = 22
@@ -432,6 +433,9 @@ func (chs *ClientHelloSpec) ImportTLSClientHello(data map[string][]byte) error {
 				if err != nil {
 					return err
 				}
+			case utlsExtensionOldApplicationSettings:
+				// TODO: tlsfingerprint.io should record/provide application settings data
+				extWriter.(*OldApplicationSettingsExtension).SupportedProtocols = []string{"h2"}
 			case utlsExtensionApplicationSettings:
 				// TODO: tlsfingerprint.io should record/provide application settings data
 				extWriter.(*ApplicationSettingsExtension).SupportedProtocols = []string{"h2"}
