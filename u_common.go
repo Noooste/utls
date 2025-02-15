@@ -36,7 +36,7 @@ const (
 
 	utlsExtensionPadding             uint16 = 21
 	utlsExtensionCompressCertificate uint16 = 27     // https://datatracker.ietf.org/doc/html/rfc8879#section-7.1
-	utlsExtensionApplicationSettings uint16 = 17513  // not IANA assigned
+	utlsExtensionApplicationSettings uint16 = 17613  // not IANA assigned
 	utlsFakeExtensionCustom          uint16 = 1234   // not IANA assigned, for ALPS
 	utlsExtensionECH                 uint16 = 0xfe0d // draft-ietf-tls-esni-17
 	utlsExtensionECHOuterExtensions  uint16 = 0xfd00 // draft-ietf-tls-esni-17
