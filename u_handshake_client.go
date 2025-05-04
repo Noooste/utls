@@ -12,11 +12,11 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/Noooste/utls/internal/fips140tls"
+	"github.com/Noooste/utls/internal/hpke"
+	"github.com/Noooste/utls/internal/tls13"
 	"github.com/andybalholm/brotli"
 	"github.com/klauspost/compress/zstd"
-	"github.com/refraction-networking/utls/internal/fips140tls"
-	"github.com/refraction-networking/utls/internal/hpke"
-	"github.com/refraction-networking/utls/internal/tls13"
 )
 
 // This function is called by (*clientHandshakeStateTLS13).readServerCertificate()
@@ -593,7 +593,7 @@ func (c *UConn) clientHandshake(ctx context.Context) (err error) {
 
 func (c *UConn) echTranscriptMsg(outer *clientHelloMsg, echCtx *echClientContext) (err error) {
 	// Recreate the inner ClientHello from its compressed form using server's decodeInnerClientHello function.
-	// See https://github.com/refraction-networking/utls/blob/e430876b1d82fdf582efc57f3992d448e7ab3d8a/ech.go#L276-L283
+	// See https://github.com/Noooste/utls/blob/e430876b1d82fdf582efc57f3992d448e7ab3d8a/ech.go#L276-L283
 	encodedInner, err := encodeInnerClientHelloReorderOuterExts(echCtx.innerHello, int(echCtx.config.MaxNameLength), c.extensionsList())
 	if err != nil {
 		return err
