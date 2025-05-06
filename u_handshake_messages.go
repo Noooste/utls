@@ -65,6 +65,9 @@ func (m *encryptedExtensionsMsg) utlsUnmarshal(extension uint16, extData cryptob
 	case utlsExtensionApplicationSettings:
 		m.utls.hasApplicationSettings = true
 		m.utls.applicationSettings = []byte(extData)
+	case utlsOldExtensionApplicationSettings:
+		m.utls.hasApplicationSettings = true
+		m.utls.applicationSettings = []byte(extData)
 	case utlsExtensionECH:
 		var err error
 		m.utls.echRetryConfigs, err = UnmarshalECHConfigs([]byte(extData))
@@ -130,6 +133,9 @@ func (m *utlsClientEncryptedExtensionsMsg) unmarshal(data []byte) bool {
 
 		switch extension {
 		case utlsExtensionApplicationSettings:
+			m.hasApplicationSettings = true
+			m.applicationSettings = []byte(extData)
+		case utlsOldExtensionApplicationSettings:
 			m.hasApplicationSettings = true
 			m.applicationSettings = []byte(extData)
 		default:
