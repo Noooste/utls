@@ -10,25 +10,24 @@ import (
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/ed25519"
-	"crypto/mlkem"
 	"crypto/rsa"
 	"crypto/subtle"
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"github.com/Noooste/utls/internal/fips140/mlkem"
+	"github.com/Noooste/utls/internal/fips140/tls13"
+	"github.com/Noooste/utls/internal/fips140tls"
+	"github.com/Noooste/utls/internal/hpke"
 	"hash"
+	"internal/byteorder"
+	"internal/godebug"
 	"io"
 	"net"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
-
-	"github.com/Noooste/utls/internal/byteorder"
-	"github.com/Noooste/utls/internal/fips140tls"
-	"github.com/Noooste/utls/internal/hpke"
-	"github.com/Noooste/utls/internal/tls13"
-
-	circlSign "github.com/cloudflare/circl/sign"
 )
 
 type clientHandshakeState struct {
@@ -42,19 +41,16 @@ type clientHandshakeState struct {
 	session      *SessionState // the session being resumed
 	ticket       []byte        // a fresh ticket received during this handshake
 
-	uconn *UConn // [uTLS]
+	uconn *UConn
 }
 
 var testingOnlyForceClientHelloSignatureAlgorithms []SignatureScheme
 
 func (c *Conn) makeClientHello() (*clientHelloMsg, *keySharePrivateKeys, *echClientContext, error) {
 	config := c.config
-
-	// [UTLS SECTION START]
-	if len(config.ServerName) == 0 && !config.InsecureSkipVerify && len(config.InsecureServerNameToVerify) == 0 {
-		return nil, nil, nil, errors.New("tls: at least one of ServerName, InsecureSkipVerify or InsecureServerNameToVerify must be specified in the tls.Config")
+	if len(config.ServerName) == 0 && !config.InsecureSkipVerify {
+		return nil, nil, nil, errors.New("tls: either ServerName or InsecureSkipVerify must be specified in the tls.Config")
 	}
-	// [UTLS SECTION END]
 
 	nextProtosLength := 0
 	for _, proto := range config.NextProtos {
@@ -72,7 +68,10 @@ func (c *Conn) makeClientHello() (*clientHelloMsg, *keySharePrivateKeys, *echCli
 	if len(supportedVersions) == 0 {
 		return nil, nil, nil, errors.New("tls: no supported versions satisfy MinVersion and MaxVersion")
 	}
-	maxVersion := config.maxSupportedVersion(roleClient)
+	// Since supportedVersions is sorted in descending order, the first element
+	// is the maximum version and the last element is the minimum version.
+	maxVersion := supportedVersions[0]
+	minVersion := supportedVersions[len(supportedVersions)-1]
 
 	hello := &clientHelloMsg{
 		vers:                         maxVersion,
@@ -100,24 +99,12 @@ func (c *Conn) makeClientHello() (*clientHelloMsg, *keySharePrivateKeys, *echCli
 		hello.secureRenegotiation = c.clientFinished[:]
 	}
 
-	preferenceOrder := cipherSuitesPreferenceOrder
-	if !hasAESGCMHardwareSupport {
-		preferenceOrder = cipherSuitesPreferenceOrderNoAES
-	}
-	configCipherSuites := config.cipherSuites()
-	hello.cipherSuites = make([]uint16, 0, len(configCipherSuites))
-
-	for _, suiteId := range preferenceOrder {
-		suite := mutualCipherSuite(configCipherSuites, suiteId)
-		if suite == nil {
-			continue
-		}
-		// Don't advertise TLS 1.2-only cipher suites unless
-		// we're attempting TLS 1.2.
-		if maxVersion < VersionTLS12 && suite.flags&suiteTLS12 != 0 {
-			continue
-		}
-		hello.cipherSuites = append(hello.cipherSuites, suiteId)
+	hello.cipherSuites = config.cipherSuites(hasAESGCMHardwareSupport)
+	// Don't advertise TLS 1.2-only cipher suites unless we're attempting TLS 1.2.
+	if maxVersion < VersionTLS12 {
+		hello.cipherSuites = slices.DeleteFunc(hello.cipherSuites, func(id uint16) bool {
+			return cipherSuiteByID(id).flags&suiteTLS12 != 0
+		})
 	}
 
 	_, err := io.ReadFull(config.rand(), hello.random)
@@ -138,20 +125,22 @@ func (c *Conn) makeClientHello() (*clientHelloMsg, *keySharePrivateKeys, *echCli
 	}
 
 	if maxVersion >= VersionTLS12 {
-		hello.supportedSignatureAlgorithms = supportedSignatureAlgorithms()
+		hello.supportedSignatureAlgorithms = supportedSignatureAlgorithms(minVersion)
+		hello.supportedSignatureAlgorithmsCert = supportedSignatureAlgorithmsCert()
 	}
 	if testingOnlyForceClientHelloSignatureAlgorithms != nil {
 		hello.supportedSignatureAlgorithms = testingOnlyForceClientHelloSignatureAlgorithms
 	}
 
 	var keyShareKeys *keySharePrivateKeys
-	if hello.supportedVersions[0] == VersionTLS13 {
+	if maxVersion >= VersionTLS13 {
 		// Reset the list of ciphers when the client only supports TLS 1.3.
-		if len(hello.supportedVersions) == 1 {
+		if minVersion >= VersionTLS13 {
 			hello.cipherSuites = nil
 		}
+
 		if fips140tls.Required() {
-			hello.cipherSuites = append(hello.cipherSuites, defaultCipherSuitesTLS13FIPS...)
+			hello.cipherSuites = append(hello.cipherSuites, allowedCipherSuitesTLS13FIPS...)
 		} else if hasAESGCMHardwareSupport {
 			hello.cipherSuites = append(hello.cipherSuites, defaultCipherSuitesTLS13...)
 		} else {
@@ -277,6 +266,7 @@ func (c *Conn) clientHandshake(ctx context.Context) (err error) {
 	// This may be a renegotiation handshake, in which case some fields
 	// need to be reset.
 	c.didResume = false
+	c.curveID = 0
 
 	hello, keyShareKeys, ech, err := c.makeClientHello()
 	if err != nil {
@@ -397,12 +387,6 @@ func (c *Conn) clientHandshake(ctx context.Context) (err error) {
 
 func (c *Conn) loadSession(hello *clientHelloMsg) (
 	session *SessionState, earlySecret *tls13.EarlySecret, binderKey []byte, err error) {
-	// [UTLS SECTION START]
-	if c.utls.sessionController != nil {
-		c.utls.sessionController.onEnterLoadSessionCheck()
-		defer c.utls.sessionController.onLoadSessionReturn()
-	}
-	// [UTLS SECTION END]
 	if c.config.SessionTicketsDisabled || c.config.ClientSessionCache == nil {
 		return nil, nil, nil, nil
 	}
@@ -452,39 +436,30 @@ func (c *Conn) loadSession(hello *clientHelloMsg) (
 	// Check that the cached server certificate is not expired, and that it's
 	// valid for the ServerName. This should be ensured by the cache key, but
 	// protect the application from a faulty ClientSessionCache implementation.
-	// [UTLS SECTION START]
-	if !c.config.InsecureSkipTimeVerify {
-		if c.config.time().After(session.peerCertificates[0].NotAfter) {
-			// Expired certificate, delete the entry.
-			c.config.ClientSessionCache.Put(cacheKey, nil)
-			return nil, nil, nil, nil
-		}
+	if c.config.time().After(session.peerCertificates[0].NotAfter) {
+		// Expired certificate, delete the entry.
+		c.config.ClientSessionCache.Put(cacheKey, nil)
+		return nil, nil, nil, nil
 	}
-	// [UTLS SECTION END]
 	if !c.config.InsecureSkipVerify {
 		if len(session.verifiedChains) == 0 {
 			// The original connection had InsecureSkipVerify, while this doesn't.
 			return nil, nil, nil, nil
 		}
-		// [UTLS SECTION START]
-		var dnsName string
-		if len(c.config.InsecureServerNameToVerify) == 0 {
-			dnsName = c.config.ServerName
-		} else if c.config.InsecureServerNameToVerify != "*" {
-			dnsName = c.config.InsecureServerNameToVerify
+		if err := session.peerCertificates[0].VerifyHostname(c.config.ServerName); err != nil {
+			return nil, nil, nil, nil
 		}
-		if len(dnsName) > 0 {
-			if err := session.peerCertificates[0].VerifyHostname(dnsName); err != nil {
-				return nil, nil, nil, nil
-			}
-		}
-		// [UTLS SECTION END]
 	}
 
 	if session.version != VersionTLS13 {
 		// In TLS 1.2 the cipher suite must match the resumed session. Ensure we
 		// are still offering it.
 		if mutualCipherSuite(hello.cipherSuites, session.cipherSuite) == nil {
+			return nil, nil, nil, nil
+		}
+
+		// FIPS 140-3 requires the use of Extended Master Secret.
+		if !session.extMasterSecret && fips140tls.Required() {
 			return nil, nil, nil, nil
 		}
 
@@ -545,11 +520,6 @@ func (c *Conn) loadSession(hello *clientHelloMsg) (
 	// Compute the PSK binders. See RFC 8446, Section 4.2.11.2.
 	earlySecret = tls13.NewEarlySecret(cipherSuite.hash.New, session.secret)
 	binderKey = earlySecret.ResumptionBinderKey()
-	// [UTLS SECTION START]
-	if c.utls.sessionController != nil && !c.utls.sessionController.shouldLoadSessionWriteBinders() {
-		return
-	}
-	// [UTLS SECTION END]
 	transcript := cipherSuite.hash.New()
 	if err := computeAndUpdatePSK(hello, binderKey, transcript, cipherSuite.finishedHash); err != nil {
 		return nil, nil, nil, err
@@ -582,6 +552,19 @@ func (c *Conn) pickTLSVersion(serverHello *serverHelloMsg) error {
 // hs.hello, hs.serverHello, and, optionally, hs.session to be set.
 func (hs *clientHandshakeState) handshake() error {
 	c := hs.c
+
+	// If we did not load a session (hs.session == nil), but we did set a
+	// session ID in the transmitted client hello (hs.hello.sessionId != nil),
+	// it means we tried to negotiate TLS 1.3 and sent a random session ID as a
+	// compatibility measure (see RFC 8446, Section 4.1.2).
+	//
+	// Since we're now handshaking for TLS 1.2, if the server echoed the
+	// transmitted ID back to us, we know mischief is afoot: the session ID
+	// was random and can't possibly be recognized by the server.
+	if hs.session == nil && hs.hello.sessionId != nil && bytes.Equal(hs.hello.sessionId, hs.serverHello.sessionId) {
+		c.sendAlert(alertIllegalParameter)
+		return errors.New("tls: server echoed TLS 1.3 compatibility session ID in TLS 1.2")
+	}
 
 	isResume, err := hs.processServerHello()
 	if err != nil {
@@ -670,16 +653,14 @@ func (hs *clientHandshakeState) pickCipherSuite() error {
 		return errors.New("tls: server chose an unconfigured cipher suite")
 	}
 
-	// [UTLS SECTION START]
-	// if hs.c.config.CipherSuites == nil && !fips140tls.Required() && rsaKexCiphers[hs.suite.id] {
-	// 	tlsrsakex.Value() // ensure godebug is initialized
-	// 	tlsrsakex.IncNonDefault()
-	// }
-	// if hs.c.config.CipherSuites == nil && !fips140tls.Required() && tdesCiphers[hs.suite.id] {
-	// 	tls3des.Value() // ensure godebug is initialized
-	// 	tls3des.IncNonDefault()
-	// }
-	// [UTLS SECTION END]
+	if hs.c.config.CipherSuites == nil && !fips140tls.Required() && rsaKexCiphers[hs.suite.id] {
+		tlsrsakex.Value() // ensure godebug is initialized
+		tlsrsakex.IncNonDefault()
+	}
+	if hs.c.config.CipherSuites == nil && !fips140tls.Required() && tdesCiphers[hs.suite.id] {
+		tls3des.Value() // ensure godebug is initialized
+		tls3des.IncNonDefault()
+	}
 
 	hs.c.cipherSuite = hs.suite.id
 	return nil
@@ -814,6 +795,10 @@ func (hs *clientHandshakeState) doFullHandshake() error {
 		hs.masterSecret = extMasterFromPreMasterSecret(c.vers, hs.suite, preMasterSecret,
 			hs.finishedHash.Sum())
 	} else {
+		if fips140tls.Required() {
+			c.sendAlert(alertHandshakeFailure)
+			return errors.New("tls: FIPS 140-3 requires the use of Extended Master Secret")
+		}
 		hs.masterSecret = masterFromPreMasterSecret(c.vers, hs.suite, preMasterSecret,
 			hs.hello.random, hs.serverHello.random)
 	}
@@ -845,6 +830,10 @@ func (hs *clientHandshakeState) doFullHandshake() error {
 			}
 			certVerify.hasSignatureAlgorithm = true
 			certVerify.signatureAlgorithm = signatureAlgorithm
+			if sigHash == crypto.SHA1 {
+				tlssha1.Value() // ensure godebug is initialized
+				tlssha1.IncNonDefault()
+			}
 		} else {
 			sigType, sigHash, err = legacyTypeAndHashFromPublicKey(key.Public())
 			if err != nil {
@@ -911,8 +900,21 @@ func (hs *clientHandshakeState) processServerHello() (bool, error) {
 	}
 
 	if hs.serverHello.compressionMethod != compressionNone {
-		c.sendAlert(alertUnexpectedMessage)
+		c.sendAlert(alertIllegalParameter)
 		return false, errors.New("tls: server selected unsupported compression format")
+	}
+
+	supportsPointFormat := false
+	offeredNonCompressedFormat := false
+	for _, format := range hs.serverHello.supportedPoints {
+		if format == pointFormatUncompressed {
+			supportsPointFormat = true
+		} else {
+			offeredNonCompressedFormat = true
+		}
+	}
+	if !supportsPointFormat && offeredNonCompressedFormat {
+		return false, errors.New("tls: server offered only incompatible point formats")
 	}
 
 	if c.handshakes == 0 && hs.serverHello.secureRenegotiationSupported {
@@ -965,14 +967,14 @@ func (hs *clientHandshakeState) processServerHello() (bool, error) {
 	hs.masterSecret = hs.session.secret
 	c.extMasterSecret = hs.session.extMasterSecret
 	c.peerCertificates = hs.session.peerCertificates
-	c.activeCertHandles = hs.c.activeCertHandles
 	c.verifiedChains = hs.session.verifiedChains
 	c.ocspResponse = hs.session.ocspResponse
 	// Let the ServerHello SCTs override the session SCTs from the original
-	// connection, if any are provided
+	// connection, if any are provided.
 	if len(c.scts) == 0 && len(hs.session.scts) != 0 {
 		c.scts = hs.session.scts
 	}
+	c.curveID = hs.session.curveID
 
 	return true, nil
 }
@@ -1074,11 +1076,7 @@ func (hs *clientHandshakeState) saveSessionTicket() error {
 	session.ticket = hs.ticket
 
 	cs := &ClientSessionState{session: session}
-	// [UTLS BEGIN]
-	if c.config.ClientSessionCache != nil { // skip saving session if cache is nil
-		c.config.ClientSessionCache.Put(cacheKey, cs)
-	}
-	// [UTLS END]
+	c.config.ClientSessionCache.Put(cacheKey, cs)
 	return nil
 }
 
@@ -1102,43 +1100,38 @@ func (hs *clientHandshakeState) sendFinished(out []byte) error {
 // to verify the signatures of during a TLS handshake.
 const defaultMaxRSAKeySize = 8192
 
-// var tlsmaxrsasize = godebug.New("tlsmaxrsasize") // [uTLS] unused
+var tlsmaxrsasize = godebug.New("tlsmaxrsasize")
 
 func checkKeySize(n int) (max int, ok bool) {
-	// [uTLS SECTION START]
-	// Disable the unsupported godebug package
-	// if v := tlsmaxrsasize.Value(); v != "" {
-	// 	if max, err := strconv.Atoi(v); err == nil {
-	// 		if (n <= max) != (n <= defaultMaxRSAKeySize) {
-	// 			tlsmaxrsasize.IncNonDefault()
-	// 		}
-	// 		return max, n <= max
-	// 	}
-	// }
-	// [uTLS SECTION END]
+	if v := tlsmaxrsasize.Value(); v != "" {
+		if max, err := strconv.Atoi(v); err == nil {
+			if (n <= max) != (n <= defaultMaxRSAKeySize) {
+				tlsmaxrsasize.IncNonDefault()
+			}
+			return max, n <= max
+		}
+	}
 	return defaultMaxRSAKeySize, n <= defaultMaxRSAKeySize
 }
 
 // verifyServerCertificate parses and verifies the provided chain, setting
 // c.verifiedChains and c.peerCertificates or sending the appropriate alert.
 func (c *Conn) verifyServerCertificate(certificates [][]byte) error {
-	activeHandles := make([]*activeCert, len(certificates))
 	certs := make([]*x509.Certificate, len(certificates))
 	for i, asn1Data := range certificates {
 		cert, err := globalCertCache.newCert(asn1Data)
 		if err != nil {
-			c.sendAlert(alertBadCertificate)
+			c.sendAlert(alertDecodeError)
 			return errors.New("tls: failed to parse certificate from server: " + err.Error())
 		}
-		if cert.cert.PublicKeyAlgorithm == x509.RSA {
-			n := cert.cert.PublicKey.(*rsa.PublicKey).N.BitLen()
+		if cert.PublicKeyAlgorithm == x509.RSA {
+			n := cert.PublicKey.(*rsa.PublicKey).N.BitLen()
 			if max, ok := checkKeySize(n); !ok {
 				c.sendAlert(alertBadCertificate)
 				return fmt.Errorf("tls: server sent certificate containing RSA key larger than %d bits", max)
 			}
 		}
-		activeHandles[i] = cert
-		certs[i] = cert.cert
+		certs[i] = cert
 	}
 
 	echRejected := c.config.EncryptedClientHelloConfigList != nil && !c.echAccepted
@@ -1150,23 +1143,11 @@ func (c *Conn) verifyServerCertificate(certificates [][]byte) error {
 			}
 		} else {
 			opts := x509.VerifyOptions{
-				Roots:       c.config.RootCAs,
-				CurrentTime: c.config.time(),
-				// DNSName:       c.serverName, // [uTLS]
+				Roots:         c.config.RootCAs,
+				CurrentTime:   c.config.time(),
+				DNSName:       c.serverName,
 				Intermediates: x509.NewCertPool(),
 			}
-
-			// [UTLS SECTION START]
-			if c.config.InsecureSkipTimeVerify {
-				opts.CurrentTime = certs[0].NotAfter
-			}
-
-			if len(c.config.InsecureServerNameToVerify) == 0 {
-				opts.DNSName = c.config.ServerName
-			} else if c.config.InsecureServerNameToVerify != "*" {
-				opts.DNSName = c.config.InsecureServerNameToVerify
-			}
-			// [UTLS SECTION END]
 
 			for _, cert := range certs[1:] {
 				opts.Intermediates.AddCert(cert)
@@ -1184,24 +1165,12 @@ func (c *Conn) verifyServerCertificate(certificates [][]byte) error {
 			}
 		}
 	} else if !c.config.InsecureSkipVerify {
-		// [UTLS SECTION START]
 		opts := x509.VerifyOptions{
-			Roots:       c.config.RootCAs,
-			CurrentTime: c.config.time(),
-			// DNSName:       c.serverName, // [uTLS]
+			Roots:         c.config.RootCAs,
+			CurrentTime:   c.config.time(),
+			DNSName:       c.config.ServerName,
 			Intermediates: x509.NewCertPool(),
 		}
-
-		if c.config.InsecureSkipTimeVerify {
-			opts.CurrentTime = certs[0].NotAfter
-		}
-
-		if len(c.config.InsecureServerNameToVerify) == 0 {
-			opts.DNSName = c.config.ServerName
-		} else if c.config.InsecureServerNameToVerify != "*" {
-			opts.DNSName = c.config.InsecureServerNameToVerify
-		}
-		// [UTLS SECTION END]
 
 		for _, cert := range certs[1:] {
 			opts.Intermediates.AddCert(cert)
@@ -1220,14 +1189,13 @@ func (c *Conn) verifyServerCertificate(certificates [][]byte) error {
 	}
 
 	switch certs[0].PublicKey.(type) {
-	case *rsa.PublicKey, *ecdsa.PublicKey, ed25519.PublicKey, circlSign.PublicKey: // [UTLS] ported from cloudflare/go
+	case *rsa.PublicKey, *ecdsa.PublicKey, ed25519.PublicKey:
 		break
 	default:
 		c.sendAlert(alertUnsupportedCertificate)
 		return fmt.Errorf("tls: server's certificate contains an unsupported type of public key: %T", certs[0].PublicKey)
 	}
 
-	c.activeCertHandles = activeHandles
 	c.peerCertificates = certs
 
 	if c.config.VerifyPeerCertificate != nil && !echRejected {

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/Noooste/utls/internal/tls13"
+	"github.com/Noooste/utls/internal/fips140/tls13"
 )
 
 // Tracking the state of calling conn.loadSession

@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"hash"
+	"internal/godebug"
 	"io"
 	"net"
 	"sync"
@@ -725,6 +726,15 @@ func (c *Conn) readRecordOrCCS(expectChangeCipherSpec bool) error {
 			return c.in.setErrorLocked(io.EOF)
 		}
 		if c.vers == VersionTLS13 {
+			// TLS 1.3 removed warning-level alerts except for alertUserCanceled
+			// (RFC 8446, § 6.1). Since at least one major implementation
+			// (https://bugs.openjdk.org/browse/JDK-8323517) misuses this alert,
+			// many TLS stacks now ignore it outright when seen in a TLS 1.3
+			// handshake (e.g. BoringSSL, NSS, Rustls).
+			if alert(data[1]) == alertUserCanceled {
+				// Like TLS 1.2 alertLevelWarning alerts, we drop the record and retry.
+				return c.retryReadRecord(expectChangeCipherSpec)
+			}
 			return c.in.setErrorLocked(&net.OpError{Op: "remote error", Err: alert(data[1])})
 		}
 		switch data[0] {
@@ -750,7 +760,7 @@ func (c *Conn) readRecordOrCCS(expectChangeCipherSpec bool) error {
 		// 5, a server can send a ChangeCipherSpec before its ServerHello, when
 		// c.vers is still unset. That's not useful though and suspicious if the
 		// server then selects a lower protocol version, so don't allow that.
-		if c.vers == VersionTLS13 && !handshakeComplete {
+		if c.vers == VersionTLS13 {
 			return c.retryReadRecord(expectChangeCipherSpec)
 		}
 		if !expectChangeCipherSpec {
@@ -1158,10 +1168,8 @@ func (c *Conn) unmarshalHandshakeMessage(data []byte, transcript transcriptHash)
 		}
 	case typeFinished:
 		m = new(finishedMsg)
-	// [uTLS] Commented typeEncryptedExtensions to force
-	// utlsHandshakeMessageType to handle it
-	// case typeEncryptedExtensions:
-	// 	m = new(encryptedExtensionsMsg)
+	case typeEncryptedExtensions:
+		m = new(encryptedExtensionsMsg)
 	case typeEndOfEarlyData:
 		m = new(endOfEarlyDataMsg)
 	case typeKeyUpdate:
@@ -1183,7 +1191,7 @@ func (c *Conn) unmarshalHandshakeMessage(data []byte, transcript transcriptHash)
 	data = append([]byte(nil), data...)
 
 	if !m.unmarshal(data) {
-		return nil, c.in.setErrorLocked(c.sendAlert(alertUnexpectedMessage))
+		return nil, c.in.setErrorLocked(c.sendAlert(alertDecodeError))
 	}
 
 	if transcript != nil {
@@ -1625,7 +1633,7 @@ func (c *Conn) ConnectionState() ConnectionState {
 	return c.connectionStateLocked()
 }
 
-// var tlsunsafeekm = godebug.New("tlsunsafeekm") // [uTLS] unsupportted
+var tlsunsafeekm = godebug.New("tlsunsafeekm")
 
 func (c *Conn) connectionStateLocked() ConnectionState {
 	var state ConnectionState
@@ -1634,8 +1642,7 @@ func (c *Conn) connectionStateLocked() ConnectionState {
 	state.NegotiatedProtocol = c.clientProtocol
 	state.DidResume = c.didResume
 	state.testingOnlyDidHRR = c.didHRR
-	// c.curveID is not set on TLS 1.0–1.2 resumptions. Fix that before exposing it.
-	state.testingOnlyCurveID = c.curveID
+	state.CurveID = c.curveID
 	state.NegotiatedProtocolIsMutual = true
 	state.ServerName = c.serverName
 	state.CipherSuite = c.cipherSuite
@@ -1654,13 +1661,10 @@ func (c *Conn) connectionStateLocked() ConnectionState {
 		state.ekm = noEKMBecauseRenegotiation
 	} else if c.vers != VersionTLS13 && !c.extMasterSecret {
 		state.ekm = func(label string, context []byte, length int) ([]byte, error) {
-			// [uTLS SECTION START]
-			// Disabling unsupported godebug package
-			// if tlsunsafeekm.Value() == "1" {
-			// 	tlsunsafeekm.IncNonDefault()
-			// 	return c.ekm(label, context, length)
-			// }
-			// [uTLS SECTION END]
+			if tlsunsafeekm.Value() == "1" {
+				tlsunsafeekm.IncNonDefault()
+				return c.ekm(label, context, length)
+			}
 			return noEKMBecauseNoEMS(label, context, length)
 		}
 	} else {

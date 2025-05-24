@@ -13,9 +13,8 @@ import (
 	"crypto/sha512"
 	"errors"
 	"fmt"
+	"github.com/Noooste/utls/internal/fips140/tls12"
 	"hash"
-
-	"github.com/Noooste/utls/internal/tls12"
 )
 
 type prfFunc func(secret []byte, label string, seed []byte, keyLen int) []byte
@@ -225,11 +224,11 @@ func (h finishedHash) serverSum(masterSecret []byte) []byte {
 // hashForClientCertificate returns the handshake messages so far, pre-hashed if
 // necessary, suitable for signing by a TLS client certificate.
 func (h finishedHash) hashForClientCertificate(sigType uint8, hashAlg crypto.Hash) []byte {
-	if (h.version >= VersionTLS12 || sigType == signatureEd25519 || circlSchemeBySigType(sigType) != nil) && h.buffer == nil { // [UTLS] ported from cloudflare/go
+	if (h.version >= VersionTLS12 || sigType == signatureEd25519) && h.buffer == nil {
 		panic("tls: handshake hash for a client certificate requested after discarding the handshake buffer")
 	}
 
-	if sigType == signatureEd25519 || circlSchemeBySigType(sigType) != nil { // [UTLS] ported from cloudflare/go
+	if sigType == signatureEd25519 {
 		return h.buffer
 	}
 

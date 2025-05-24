@@ -5,12 +5,12 @@
 package tls
 
 import (
-	"crypto/mlkem"
 	crand "crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/Noooste/utls/internal/fips140/mlkem"
 	"io"
 	"math"
 	"math/big"
@@ -2920,7 +2920,7 @@ func generateRandomizedSpec(
 		return p, fmt.Errorf("using non-randomized ClientHelloID %v to generate randomized spec", id.Client)
 	}
 
-	p.CipherSuites = defaultCipherSuites()
+	p.CipherSuites = defaultCipherSuites(false)
 	shuffledSuites, err := shuffledCiphers(r)
 	if err != nil {
 		return p, err

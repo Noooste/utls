@@ -12,9 +12,9 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/Noooste/utls/internal/fips140/tls13"
 	"github.com/Noooste/utls/internal/fips140tls"
 	"github.com/Noooste/utls/internal/hpke"
-	"github.com/Noooste/utls/internal/tls13"
 	"github.com/andybalholm/brotli"
 	"github.com/klauspost/compress/zstd"
 )
@@ -211,6 +211,7 @@ func (c *Conn) makeClientHelloForApplyPreset() (*clientHelloMsg, *keySharePrivat
 		return nil, nil, nil, errors.New("tls: no supported versions satisfy MinVersion and MaxVersion")
 	}
 	maxVersion := config.maxSupportedVersion(roleClient)
+	minVersion := config.minSupportedVersion(roleClient)
 
 	hello := &clientHelloMsg{
 		vers:                         maxVersion,
@@ -242,7 +243,7 @@ func (c *Conn) makeClientHelloForApplyPreset() (*clientHelloMsg, *keySharePrivat
 	if !hasAESGCMHardwareSupport {
 		preferenceOrder = cipherSuitesPreferenceOrderNoAES
 	}
-	configCipherSuites := config.cipherSuites()
+	configCipherSuites := config.cipherSuites(false)
 	hello.cipherSuites = make([]uint16, 0, len(configCipherSuites))
 
 	for _, suiteId := range preferenceOrder {
@@ -276,7 +277,7 @@ func (c *Conn) makeClientHelloForApplyPreset() (*clientHelloMsg, *keySharePrivat
 	}
 
 	if maxVersion >= VersionTLS12 {
-		hello.supportedSignatureAlgorithms = supportedSignatureAlgorithms()
+		hello.supportedSignatureAlgorithms = supportedSignatureAlgorithms(minVersion)
 	}
 	if testingOnlyForceClientHelloSignatureAlgorithms != nil {
 		hello.supportedSignatureAlgorithms = testingOnlyForceClientHelloSignatureAlgorithms

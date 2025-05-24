@@ -7,12 +7,11 @@ package tls
 import (
 	"crypto/ecdh"
 	"crypto/hmac"
-	"crypto/mlkem"
 	"errors"
+	"github.com/Noooste/utls/internal/fips140/mlkem"
+	"github.com/Noooste/utls/internal/fips140/tls13"
 	"hash"
 	"io"
-
-	"github.com/Noooste/utls/internal/tls13"
 )
 
 // This file contains the functions necessary to compute the TLS 1.3 key
@@ -81,20 +80,5 @@ func curveForCurveID(id CurveID) (ecdh.Curve, bool) {
 		return ecdh.P521(), true
 	default:
 		return nil, false
-	}
-}
-
-func curveIDForCurve(curve ecdh.Curve) (CurveID, bool) {
-	switch curve {
-	case ecdh.X25519():
-		return X25519, true
-	case ecdh.P256():
-		return CurveP256, true
-	case ecdh.P384():
-		return CurveP384, true
-	case ecdh.P521():
-		return CurveP521, true
-	default:
-		return 0, false
 	}
 }

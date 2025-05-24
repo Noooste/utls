@@ -18,6 +18,8 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"github.com/Noooste/utls/internal/fips140tls"
+	"internal/byteorder"
 	"io"
 	"math/big"
 	"net"
@@ -30,9 +32,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/Noooste/utls/internal/byteorder"
-	"github.com/Noooste/utls/internal/fips140tls"
 )
 
 // Note: see comment in handshake_test.go for details of how the reference
@@ -2656,8 +2655,8 @@ func TestClientHandshakeContextCancellation(t *testing.T) {
 	if err != context.Canceled {
 		t.Errorf("Unexpected client handshake error: %v", err)
 	}
-	if runtime.GOARCH == "wasm" {
-		t.Skip("conn.Close does not error as expected when called multiple times on WASM")
+	if runtime.GOOS == "js" || runtime.GOOS == "wasip1" {
+		t.Skip("conn.Close does not error as expected when called multiple times on GOOS=js or GOOS=wasip1")
 	}
 	err = cli.Close()
 	if err == nil {
@@ -2708,7 +2707,7 @@ func testTLS13OnlyClientHelloCipherSuite(t *testing.T, ciphers []uint16) {
 		GetConfigForClient: func(chi *ClientHelloInfo) (*Config, error) {
 			expectedCiphersuites := defaultCipherSuitesTLS13NoAES
 			if fips140tls.Required() {
-				expectedCiphersuites = defaultCipherSuitesTLS13FIPS
+				expectedCiphersuites = allowedCipherSuitesTLS13FIPS
 			}
 			if len(chi.CipherSuites) != len(expectedCiphersuites) {
 				t.Errorf("only TLS 1.3 suites should be advertised, got=%x", chi.CipherSuites)

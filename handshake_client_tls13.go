@@ -8,18 +8,16 @@ import (
 	"bytes"
 	"context"
 	"crypto"
+	"crypto/hkdf"
 	"crypto/hmac"
-	"crypto/mlkem"
 	"crypto/rsa"
 	"crypto/subtle"
 	"errors"
-	"fmt"
+	"github.com/Noooste/utls/internal/fips140/mlkem"
+	"github.com/Noooste/utls/internal/fips140/tls13"
 	"hash"
 	"slices"
 	"time"
-
-	"github.com/Noooste/utls/internal/hkdf"
-	"github.com/Noooste/utls/internal/tls13"
 )
 
 type clientHandshakeStateTLS13 struct {
@@ -43,7 +41,7 @@ type clientHandshakeStateTLS13 struct {
 
 	echContext *echClientContext
 
-	uconn *UConn // [uTLS]
+	uconn *UConn // For QUIC connections, the underlying utlsConn.
 }
 
 // handshake requires hs.c, hs.hello, hs.serverHello, hs.keyShareKeys, and,
@@ -75,17 +73,9 @@ func (hs *clientHandshakeStateTLS13) handshake() error {
 
 	if hs.echContext != nil {
 		hs.echContext.innerTranscript = hs.suite.hash.New()
-		// [uTLS SECTION BEGIN]
-		if hs.uconn != nil && hs.uconn.clientHelloBuildStatus == BuildByUtls {
-			if err := hs.uconn.echTranscriptMsg(hs.hello, hs.echContext); err != nil {
-				return err
-			}
-		} else {
-			if err := transcriptMsg(hs.echContext.innerHello, hs.echContext.innerTranscript); err != nil {
-				return err
-			}
+		if err := transcriptMsg(hs.echContext.innerHello, hs.echContext.innerTranscript); err != nil {
+			return err
 		}
-		// [uTLS SECTION END]
 	}
 
 	if bytes.Equal(hs.serverHello.random, helloRetryRequestRandom) {
@@ -102,12 +92,13 @@ func (hs *clientHandshakeStateTLS13) handshake() error {
 		confTranscript.Write(hs.serverHello.original[:30])
 		confTranscript.Write(make([]byte, 8))
 		confTranscript.Write(hs.serverHello.original[38:])
-		acceptConfirmation := tls13.ExpandLabel(hs.suite.hash.New,
-			hkdf.Extract(hs.suite.hash.New, hs.echContext.innerHello.random, nil),
-			"ech accept confirmation",
-			confTranscript.Sum(nil),
-			8,
-		)
+		h := hs.suite.hash.New
+		prk, err := hkdf.Extract(h, hs.echContext.innerHello.random, nil)
+		if err != nil {
+			c.sendAlert(alertInternalError)
+			return err
+		}
+		acceptConfirmation := tls13.ExpandLabel(h, prk, "ech accept confirmation", confTranscript.Sum(nil), 8)
 		if subtle.ConstantTimeCompare(acceptConfirmation, hs.serverHello.random[len(hs.serverHello.random)-8:]) == 1 {
 			hs.hello = hs.echContext.innerHello
 			c.serverName = c.config.ServerName
@@ -151,11 +142,6 @@ func (hs *clientHandshakeStateTLS13) handshake() error {
 	if err := hs.readServerFinished(); err != nil {
 		return err
 	}
-	// [UTLS SECTION START]
-	if err := hs.serverFinishedReceived(); err != nil {
-		return err
-	}
-	// [UTLS SECTION END]
 	if err := hs.sendClientCertificate(); err != nil {
 		return err
 	}
@@ -213,8 +199,8 @@ func (hs *clientHandshakeStateTLS13) checkServerHelloOrHRR() error {
 	}
 
 	if hs.serverHello.compressionMethod != compressionNone {
-		c.sendAlert(alertIllegalParameter)
-		return errors.New("tls: server selected unsupported compression format")
+		c.sendAlert(alertDecodeError)
+		return errors.New("tls: server sent non-zero legacy TLS compression method")
 	}
 
 	selectedSuite := mutualCipherSuiteTLS13(hs.hello.cipherSuites, hs.serverHello.cipherSuite)
@@ -281,12 +267,13 @@ func (hs *clientHandshakeStateTLS13) processHelloRetryRequest() error {
 			copy(hrrHello, hs.serverHello.original)
 			hrrHello = bytes.Replace(hrrHello, hs.serverHello.encryptedClientHello, make([]byte, 8), 1)
 			confTranscript.Write(hrrHello)
-			acceptConfirmation := tls13.ExpandLabel(hs.suite.hash.New,
-				hkdf.Extract(hs.suite.hash.New, hs.echContext.innerHello.random, nil),
-				"hrr ech accept confirmation",
-				confTranscript.Sum(nil),
-				8,
-			)
+			h := hs.suite.hash.New
+			prk, err := hkdf.Extract(h, hs.echContext.innerHello.random, nil)
+			if err != nil {
+				c.sendAlert(alertInternalError)
+				return err
+			}
+			acceptConfirmation := tls13.ExpandLabel(h, prk, "hrr ech accept confirmation", confTranscript.Sum(nil), 8)
 			if subtle.ConstantTimeCompare(acceptConfirmation, hs.serverHello.encryptedClientHello) == 1 {
 				hello = hs.echContext.innerHello
 				c.serverName = c.config.ServerName
@@ -380,67 +367,6 @@ func (hs *clientHandshakeStateTLS13) processHelloRetryRequest() error {
 		}
 	}
 
-	// [uTLS SECTION BEGINS]
-	// crypto/tls code above this point had changed crypto/tls structures in accordance with HRR, and is about
-	// to call default marshaller.
-	// Instead, we fill uTLS-specific structs and call uTLS marshaller.
-	// Only extensionCookie, extensionPreSharedKey, extensionKeyShare, extensionEarlyData, extensionSupportedVersions,
-	// and utlsExtensionPadding are supposed to change
-	if hs.uconn != nil {
-		if hs.uconn.ClientHelloID != HelloGolang {
-			if len(hs.hello.pskIdentities) > 0 {
-				// TODO: wait for someone who cares about PSK to implement
-				return errors.New("uTLS does not support reprocessing of PSK key triggered by HelloRetryRequest")
-			}
-
-			keyShareExtFound := false
-			for _, ext := range hs.uconn.Extensions {
-				// new ks seems to be generated either way
-				if ks, ok := ext.(*KeyShareExtension); ok {
-					ks.KeyShares = keyShares(hs.hello.keyShares).ToPublic()
-					keyShareExtFound = true
-				}
-			}
-			if !keyShareExtFound {
-				return errors.New("uTLS: received HelloRetryRequest, but keyshare not found among client's " +
-					"uconn.Extensions")
-			}
-
-			if len(hs.serverHello.cookie) > 0 {
-				// serverHello specified a cookie, let's echo it
-				cookieFound := false
-				for _, ext := range hs.uconn.Extensions {
-					if ks, ok := ext.(*CookieExtension); ok {
-						ks.Cookie = hs.serverHello.cookie
-						cookieFound = true
-					}
-				}
-
-				if !cookieFound {
-					// pick a random index where to add cookieExtension
-					// -2 instead of -1 is a lazy way to ensure that PSK is still a last extension
-					p, err := newPRNG()
-					if err != nil {
-						return err
-					}
-					cookieIndex := p.Intn(len(hs.uconn.Extensions) - 2)
-					if cookieIndex >= len(hs.uconn.Extensions) {
-						// this check is for empty hs.uconn.Extensions
-						return fmt.Errorf("cookieIndex >= len(hs.uconn.Extensions): %v >= %v",
-							cookieIndex, len(hs.uconn.Extensions))
-					}
-					hs.uconn.Extensions = append(hs.uconn.Extensions[:cookieIndex],
-						append([]TLSExtension{&CookieExtension{Cookie: hs.serverHello.cookie}},
-							hs.uconn.Extensions[cookieIndex:]...)...)
-				}
-			}
-			if err := hs.uconn.MarshalClientHelloNoECH(); err != nil {
-				return err
-			}
-			hs.hello.original = hs.uconn.HandshakeState.Hello.Raw
-		}
-	}
-	// [uTLS SECTION ENDS]
 	if hello.earlyData {
 		hello.earlyData = false
 		c.quicRejectedEarlyData()
@@ -453,25 +379,12 @@ func (hs *clientHandshakeStateTLS13) processHelloRetryRequest() error {
 		// extension which may have changed is keyShares.
 		hs.hello.keyShares = hello.keyShares
 		hs.echContext.innerHello = hello
-		if hs.uconn != nil && hs.uconn.clientHelloBuildStatus == BuildByUtls {
-			if err := hs.uconn.computeAndUpdateOuterECHExtension(hs.echContext.innerHello, hs.echContext, false); err != nil {
-				return err
-			}
+		if err := transcriptMsg(hs.echContext.innerHello, hs.echContext.innerTranscript); err != nil {
+			return err
+		}
 
-			hs.hello.original = hs.uconn.HandshakeState.Hello.Raw
-
-			if err := hs.uconn.echTranscriptMsg(hs.hello, hs.echContext); err != nil {
-				return err
-			}
-
-		} else {
-			if err := transcriptMsg(hs.echContext.innerHello, hs.echContext.innerTranscript); err != nil {
-				return err
-			}
-
-			if err := computeAndUpdateOuterECHExtension(hs.hello, hs.echContext.innerHello, hs.echContext, false); err != nil {
-				return err
-			}
+		if err := computeAndUpdateOuterECHExtension(hs.hello, hs.echContext.innerHello, hs.echContext, false); err != nil {
+			return err
 		}
 	} else {
 		hs.hello = hello
@@ -555,7 +468,6 @@ func (hs *clientHandshakeStateTLS13) processServerHello() error {
 	hs.usingPSK = true
 	c.didResume = true
 	c.peerCertificates = hs.session.peerCertificates
-	c.activeCertHandles = hs.session.activeCertHandles
 	c.verifiedChains = hs.session.verifiedChains
 	c.ocspResponse = hs.session.ocspResponse
 	c.scts = hs.session.scts
@@ -573,15 +485,6 @@ func (hs *clientHandshakeStateTLS13) establishHandshakeKeys() error {
 		}
 		ecdhePeerData = hs.serverHello.serverShare.data[mlkem.CiphertextSize768:]
 	}
-	// [uTLS] SECTION BEGIN
-	if hs.serverHello.serverShare.group == X25519Kyber768Draft00 {
-		if len(ecdhePeerData) != x25519PublicKeySize+mlkem.CiphertextSize768 {
-			c.sendAlert(alertIllegalParameter)
-			return errors.New("tls: invalid server X25519Kyber768Draft00 key share")
-		}
-		ecdhePeerData = hs.serverHello.serverShare.data[:x25519PublicKeySize]
-	}
-	// [uTLS] SECTION END
 	peerKey, err := hs.keyShareKeys.ecdhe.Curve().NewPublicKey(ecdhePeerData)
 	if err != nil {
 		c.sendAlert(alertIllegalParameter)
@@ -604,20 +507,6 @@ func (hs *clientHandshakeStateTLS13) establishHandshakeKeys() error {
 		}
 		sharedKey = append(mlkemShared, sharedKey...)
 	}
-	// [uTLS] SECTION BEGIN
-	if hs.serverHello.serverShare.group == X25519Kyber768Draft00 {
-		if hs.keyShareKeys.mlkem == nil {
-			return c.sendAlert(alertInternalError)
-		}
-		ciphertext := hs.serverHello.serverShare.data[x25519PublicKeySize:]
-		kyberShared, err := kyberDecapsulate(hs.keyShareKeys.mlkem, ciphertext)
-		if err != nil {
-			c.sendAlert(alertIllegalParameter)
-			return errors.New("tls: invalid X25519Kyber768Draft00 server key share")
-		}
-		sharedKey = append(sharedKey, kyberShared...)
-	}
-	// [uTLS] SECTION END
 	c.curveID = hs.serverHello.serverShare.group
 
 	earlySecret := hs.earlySecret
@@ -680,16 +569,6 @@ func (hs *clientHandshakeStateTLS13) readServerParameters() error {
 	}
 	c.clientProtocol = encryptedExtensions.alpnProtocol
 
-	// [UTLS SECTION STARTS]
-	if hs.uconn != nil {
-		err = hs.utlsReadServerParameters(encryptedExtensions)
-		if err != nil {
-			c.sendAlert(alertUnsupportedExtension)
-			return err
-		}
-	}
-	// [UTLS SECTION ENDS]
-
 	if c.quic != nil {
 		if encryptedExtensions.quicTransportParameters == nil {
 			// RFC 9001 Section 8.2.
@@ -751,10 +630,7 @@ func (hs *clientHandshakeStateTLS13) readServerCertificate() error {
 		return nil
 	}
 
-	// [UTLS SECTION BEGINS]
-	// msg, err := c.readHandshake(hs.transcript)
-	msg, err := c.readHandshake(nil) // hold writing to transcript until we know it is not compressed cert
-	// [UTLS SECTION ENDS]
+	msg, err := c.readHandshake(hs.transcript)
 	if err != nil {
 		return err
 	}
@@ -762,28 +638,12 @@ func (hs *clientHandshakeStateTLS13) readServerCertificate() error {
 	certReq, ok := msg.(*certificateRequestMsgTLS13)
 	if ok {
 		hs.certReq = certReq
-		transcriptMsg(certReq, hs.transcript) // [UTLS] if it is certReq (not compressedCert), write to transcript
 
-		// msg, err = c.readHandshake(hs.transcript)
-		msg, err = c.readHandshake(nil) // [UTLS] we don't write to transcript until make sure it is not compressed cert
+		msg, err = c.readHandshake(hs.transcript)
 		if err != nil {
 			return err
 		}
 	}
-
-	// [UTLS SECTION BEGINS]
-	var skipWritingCertToTranscript bool = false
-	if hs.uconn != nil {
-		processedMsg, err := hs.utlsReadServerCertificate(msg)
-		if err != nil {
-			return err
-		}
-		if processedMsg != nil {
-			skipWritingCertToTranscript = true
-			msg = processedMsg // msg is now a processed-by-extension certificateMsg
-		}
-	}
-	// [UTLS SECTION ENDS]
 
 	certMsg, ok := msg.(*certificateMsgTLS13)
 	if !ok {
@@ -794,13 +654,6 @@ func (hs *clientHandshakeStateTLS13) readServerCertificate() error {
 		c.sendAlert(alertDecodeError)
 		return errors.New("tls: received empty certificates message")
 	}
-	// [UTLS SECTION BEGINS]
-	if !skipWritingCertToTranscript { // write to transcript only if it is not compressedCert (i.e. if not processed by extension)
-		if err = transcriptMsg(certMsg, hs.transcript); err != nil {
-			return err
-		}
-	}
-	// [UTLS SECTION ENDS]
 
 	c.scts = certMsg.certificate.SignedCertificateTimestamps
 	c.ocspResponse = certMsg.certificate.OCSPStaple
@@ -824,7 +677,9 @@ func (hs *clientHandshakeStateTLS13) readServerCertificate() error {
 	}
 
 	// See RFC 8446, Section 4.4.3.
-	if !isSupportedSignatureAlgorithm(certVerify.signatureAlgorithm, c.config.supportedSignatureAlgorithms()) { // [UTLS] ported from cloudflare/go
+	// We don't use hs.hello.supportedSignatureAlgorithms because it might
+	// include PKCS#1 v1.5 and SHA-1 if the ClientHello also supported TLS 1.2.
+	if !isSupportedSignatureAlgorithm(certVerify.signatureAlgorithm, supportedSignatureAlgorithms(c.vers)) {
 		c.sendAlert(alertIllegalParameter)
 		return errors.New("tls: certificate used with invalid signature algorithm")
 	}
@@ -833,8 +688,7 @@ func (hs *clientHandshakeStateTLS13) readServerCertificate() error {
 		return c.sendAlert(alertInternalError)
 	}
 	if sigType == signaturePKCS1v15 || sigHash == crypto.SHA1 {
-		c.sendAlert(alertIllegalParameter)
-		return errors.New("tls: certificate used with invalid signature algorithm")
+		return c.sendAlert(alertInternalError)
 	}
 	signed := signedMessage(sigHash, serverSignatureContext, hs.transcript)
 	if err := verifyHandshakeSignature(sigType, c.peerCertificates[0].PublicKey,
@@ -1018,6 +872,11 @@ func (c *Conn) handleNewSessionTicket(msg *newSessionTicketMsgTLS13) error {
 	if lifetime > maxSessionTicketLifetime {
 		c.sendAlert(alertIllegalParameter)
 		return errors.New("tls: received a session ticket with invalid lifetime")
+	}
+
+	if len(msg.label) == 0 {
+		c.sendAlert(alertDecodeError)
+		return errors.New("tls: received a session ticket with empty opaque ticket label")
 	}
 
 	// RFC 9001, Section 4.6.1

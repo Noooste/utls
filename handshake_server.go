@@ -14,13 +14,11 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"github.com/Noooste/utls/internal/fips140tls"
 	"hash"
+	"internal/byteorder"
 	"io"
 	"time"
-
-	"github.com/Noooste/utls/internal/byteorder"
-
-	circlSign "github.com/cloudflare/circl/sign"
 )
 
 // serverHandshakeState contains details of a server handshake in progress.
@@ -80,7 +78,6 @@ func (hs *serverHandshakeState) handshake() error {
 	}
 	if hs.sessionState != nil {
 		// The client has included a session ticket and so we do an abbreviated handshake.
-		c.didResume = true
 		if err := hs.doResumeHandshake(); err != nil {
 			return err
 		}
@@ -152,7 +149,15 @@ func (c *Conn) readClientHello(ctx context.Context) (*clientHelloMsg, *echServer
 	// the contents of the client hello, since we may swap it out completely.
 	var ech *echServerContext
 	if len(clientHello.encryptedClientHello) != 0 {
-		clientHello, ech, err = c.processECHClientHello(clientHello)
+		echKeys := c.config.EncryptedClientHelloKeys
+		if c.config.GetEncryptedClientHelloKeys != nil {
+			echKeys, err = c.config.GetEncryptedClientHelloKeys(clientHelloInfo(ctx, c, clientHello))
+			if err != nil {
+				c.sendAlert(alertInternalError)
+				return nil, nil, err
+			}
+		}
+		clientHello, ech, err = c.processECHClientHello(clientHello, echKeys)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -172,7 +177,15 @@ func (c *Conn) readClientHello(ctx context.Context) (*clientHelloMsg, *echServer
 	c.ticketKeys = originalConfig.ticketKeys(configForClient)
 
 	clientVersions := clientHello.supportedVersions
-	if len(clientHello.supportedVersions) == 0 {
+	if clientHello.vers >= VersionTLS13 && len(clientVersions) == 0 {
+		// RFC 8446 4.2.1 indicates when the supported_versions extension is not sent,
+		// compatible servers MUST negotiate TLS 1.2 or earlier if supported, even
+		// if the client legacy version is TLS 1.3 or later.
+		//
+		// Since we reject empty extensionSupportedVersions in the client hello unmarshal
+		// finding the supportedVersions empty indicates the extension was not present.
+		clientVersions = supportedVersionsFromMax(VersionTLS12)
+	} else if len(clientVersions) == 0 {
 		clientVersions = supportedVersionsFromMax(clientHello.vers)
 	}
 	c.vers, ok = c.config.mutualVersion(roleServer, clientVersions)
@@ -196,13 +209,10 @@ func (c *Conn) readClientHello(ctx context.Context) (*clientHelloMsg, *echServer
 		return nil, nil, errors.New("tls: Encrypted Client Hello cannot be used pre-TLS 1.3")
 	}
 
-	// [UTLS SECTION BEGIN]
-	// Disable unsupported godebug package
-	// if c.config.MinVersion == 0 && c.vers < VersionTLS12 {
-	// 	tls10server.Value() // ensure godebug is initialized
-	// 	tls10server.IncNonDefault()
-	// }
-	// [UTLS SECTION END]
+	if c.config.MinVersion == 0 && c.vers < VersionTLS12 {
+		tls10server.Value() // ensure godebug is initialized
+		tls10server.IncNonDefault()
+	}
 
 	return clientHello, ech, nil
 }
@@ -223,7 +233,7 @@ func (hs *serverHandshakeState) processClientHello() error {
 	}
 
 	if !foundCompression {
-		c.sendAlert(alertHandshakeFailure)
+		c.sendAlert(alertIllegalParameter)
 		return errors.New("tls: client does not support uncompressed connections")
 	}
 
@@ -278,7 +288,11 @@ func (hs *serverHandshakeState) processClientHello() error {
 		hs.hello.scts = hs.cert.SignedCertificateTimestamps
 	}
 
-	hs.ecdheOk = supportsECDHE(c.config, c.vers, hs.clientHello.supportedCurves, hs.clientHello.supportedPoints)
+	hs.ecdheOk, err = supportsECDHE(c.config, c.vers, hs.clientHello.supportedCurves, hs.clientHello.supportedPoints)
+	if err != nil {
+		c.sendAlert(alertMissingExtension)
+		return err
+	}
 
 	if hs.ecdheOk && len(hs.clientHello.supportedPoints) > 0 {
 		// Although omitting the ec_point_formats extension is permitted, some
@@ -349,7 +363,7 @@ func negotiateALPN(serverProtos, clientProtos []string, quic bool) (string, erro
 
 // supportsECDHE returns whether ECDHE key exchanges can be used with this
 // pre-TLS 1.3 client.
-func supportsECDHE(c *Config, version uint16, supportedCurves []CurveID, supportedPoints []uint8) bool {
+func supportsECDHE(c *Config, version uint16, supportedCurves []CurveID, supportedPoints []uint8) (bool, error) {
 	supportsCurve := false
 	for _, curve := range supportedCurves {
 		if c.supportsCurve(version, curve) {
@@ -359,10 +373,12 @@ func supportsECDHE(c *Config, version uint16, supportedCurves []CurveID, support
 	}
 
 	supportsPointFormat := false
+	offeredNonCompressedFormat := false
 	for _, pointFormat := range supportedPoints {
 		if pointFormat == pointFormatUncompressed {
 			supportsPointFormat = true
-			break
+		} else {
+			offeredNonCompressedFormat = true
 		}
 	}
 	// Per RFC 8422, Section 5.1.2, if the Supported Point Formats extension is
@@ -371,48 +387,34 @@ func supportsECDHE(c *Config, version uint16, supportedCurves []CurveID, support
 	// the parser. See https://go.dev/issue/49126.
 	if len(supportedPoints) == 0 {
 		supportsPointFormat = true
+	} else if offeredNonCompressedFormat && !supportsPointFormat {
+		return false, errors.New("tls: client offered only incompatible point formats")
 	}
 
-	return supportsCurve && supportsPointFormat
+	return supportsCurve && supportsPointFormat, nil
 }
 
 func (hs *serverHandshakeState) pickCipherSuite() error {
 	c := hs.c
 
-	preferenceOrder := cipherSuitesPreferenceOrder
-	if !hasAESGCMHardwareSupport || !aesgcmPreferred(hs.clientHello.cipherSuites) {
-		preferenceOrder = cipherSuitesPreferenceOrderNoAES
-	}
-
-	configCipherSuites := c.config.cipherSuites()
-	preferenceList := make([]uint16, 0, len(configCipherSuites))
-	for _, suiteID := range preferenceOrder {
-		for _, id := range configCipherSuites {
-			if id == suiteID {
-				preferenceList = append(preferenceList, id)
-				break
-			}
-		}
-	}
+	preferenceList := c.config.cipherSuites(isAESGCMPreferred(hs.clientHello.cipherSuites))
 
 	hs.suite = selectCipherSuite(preferenceList, hs.clientHello.cipherSuites, hs.cipherSuiteOk)
 	if hs.suite == nil {
 		c.sendAlert(alertHandshakeFailure)
-		return errors.New("tls: no cipher suite supported by both client and server")
+		return fmt.Errorf("tls: no cipher suite supported by both client and server; client offered: %x",
+			hs.clientHello.cipherSuites)
 	}
 	c.cipherSuite = hs.suite.id
 
-	// [UTLS SECTION BEGIN]
-	// Disable unsupported godebug package
-	// if c.config.CipherSuites == nil && !fips140tls.Required() && rsaKexCiphers[hs.suite.id] {
-	// 	tlsrsakex.Value() // ensure godebug is initialized
-	// 	tlsrsakex.IncNonDefault()
-	// }
-	// if c.config.CipherSuites == nil && !fips140tls.Required() && tdesCiphers[hs.suite.id] {
-	// 	tls3des.Value() // ensure godebug is initialized
-	// 	tls3des.IncNonDefault()
-	// }
-	// [UTLS SECTION END]
+	if c.config.CipherSuites == nil && !fips140tls.Required() && rsaKexCiphers[hs.suite.id] {
+		tlsrsakex.Value() // ensure godebug is initialized
+		tlsrsakex.IncNonDefault()
+	}
+	if c.config.CipherSuites == nil && !fips140tls.Required() && tdesCiphers[hs.suite.id] {
+		tls3des.Value() // ensure godebug is initialized
+		tls3des.IncNonDefault()
+	}
 
 	for _, id := range hs.clientHello.cipherSuites {
 		if id == TLS_FALLBACK_SCSV {
@@ -506,7 +508,7 @@ func (hs *serverHandshakeState) checkForResumption() error {
 
 	// Check that we also support the ciphersuite from the session.
 	suite := selectCipherSuite([]uint16{sessionState.cipherSuite},
-		c.config.cipherSuites(), hs.cipherSuiteOk)
+		c.config.supportedCipherSuites(), hs.cipherSuiteOk)
 	if suite == nil {
 		return nil
 	}
@@ -536,6 +538,10 @@ func (hs *serverHandshakeState) checkForResumption() error {
 		// weird downgrade in client capabilities.
 		return errors.New("tls: session supported extended_master_secret but client does not")
 	}
+	if !sessionState.extMasterSecret && fips140tls.Required() {
+		// FIPS 140-3 requires the use of Extended Master Secret.
+		return nil
+	}
 
 	c.peerCertificates = sessionState.peerCertificates
 	c.ocspResponse = sessionState.ocspResponse
@@ -544,6 +550,7 @@ func (hs *serverHandshakeState) checkForResumption() error {
 	c.extMasterSecret = sessionState.extMasterSecret
 	hs.sessionState = sessionState
 	hs.suite = suite
+	c.curveID = sessionState.curveID
 	c.didResume = true
 	return nil
 }
@@ -643,7 +650,7 @@ func (hs *serverHandshakeState) doFullHandshake() error {
 		}
 		if c.vers >= VersionTLS12 {
 			certReq.hasSignatureAlgorithm = true
-			certReq.supportedSignatureAlgorithms = c.config.supportedSignatureAlgorithms() // [UTLS] ported from cloudflare/go
+			certReq.supportedSignatureAlgorithms = supportedSignatureAlgorithms(c.vers)
 		}
 
 		// An empty list of certificateAuthorities signals to
@@ -722,6 +729,10 @@ func (hs *serverHandshakeState) doFullHandshake() error {
 		hs.masterSecret = extMasterFromPreMasterSecret(c.vers, hs.suite, preMasterSecret,
 			hs.finishedHash.Sum())
 	} else {
+		if fips140tls.Required() {
+			c.sendAlert(alertHandshakeFailure)
+			return errors.New("tls: FIPS 140-3 requires the use of Extended Master Secret")
+		}
 		hs.masterSecret = masterFromPreMasterSecret(c.vers, hs.suite, preMasterSecret,
 			hs.clientHello.random, hs.hello.random)
 	}
@@ -760,6 +771,10 @@ func (hs *serverHandshakeState) doFullHandshake() error {
 			sigType, sigHash, err = typeAndHashFromSignatureScheme(certVerify.signatureAlgorithm)
 			if err != nil {
 				return c.sendAlert(alertInternalError)
+			}
+			if sigHash == crypto.SHA1 {
+				tlssha1.Value() // ensure godebug is initialized
+				tlssha1.IncNonDefault()
 			}
 		} else {
 			sigType, sigHash, err = legacyTypeAndHashFromPublicKey(pub)
@@ -846,9 +861,6 @@ func (hs *serverHandshakeState) readFinished(out []byte) error {
 }
 
 func (hs *serverHandshakeState) sendSessionTicket() error {
-	// ticketSupported is set in a resumption handshake if the
-	// ticket from the client was encrypted with an old session
-	// ticket key and thus a refreshed ticket should be sent.
 	if !hs.hello.ticketSupported {
 		return nil
 	}
@@ -906,14 +918,14 @@ func (hs *serverHandshakeState) sendFinished(out []byte) error {
 }
 
 // processCertsFromClient takes a chain of client certificates either from a
-// Certificates message and verifies them.
+// certificateMsg message or a certificateMsgTLS13 message and verifies them.
 func (c *Conn) processCertsFromClient(certificate Certificate) error {
 	certificates := certificate.Certificate
 	certs := make([]*x509.Certificate, len(certificates))
 	var err error
 	for i, asn1Data := range certificates {
 		if certs[i], err = x509.ParseCertificate(asn1Data); err != nil {
-			c.sendAlert(alertBadCertificate)
+			c.sendAlert(alertDecodeError)
 			return errors.New("tls: failed to parse client certificate: " + err.Error())
 		}
 		if certs[i].PublicKeyAlgorithm == x509.RSA {
@@ -929,7 +941,7 @@ func (c *Conn) processCertsFromClient(certificate Certificate) error {
 		if c.vers == VersionTLS13 {
 			c.sendAlert(alertCertificateRequired)
 		} else {
-			c.sendAlert(alertBadCertificate)
+			c.sendAlert(alertHandshakeFailure)
 		}
 		return errors.New("tls: client didn't provide a certificate")
 	}
@@ -972,7 +984,7 @@ func (c *Conn) processCertsFromClient(certificate Certificate) error {
 
 	if len(certs) > 0 {
 		switch certs[0].PublicKey.(type) {
-		case *ecdsa.PublicKey, *rsa.PublicKey, ed25519.PublicKey, circlSign.PublicKey: // [UTLS] ported from cloudflare/go
+		case *ecdsa.PublicKey, *rsa.PublicKey, ed25519.PublicKey:
 		default:
 			c.sendAlert(alertUnsupportedCertificate)
 			return fmt.Errorf("tls: client certificate contains an unsupported public key of type %T", certs[0].PublicKey)

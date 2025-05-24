@@ -50,11 +50,11 @@ func (c *Config) supportedSignatureAlgorithms() []SignatureScheme {
 	if c != nil && c.PQSignatureSchemesEnabled {
 		return supportedSignatureAlgorithmsWithCircl
 	}
-	return defaultSupportedSignatureAlgorithms
+	return defaultSupportedSignatureAlgorithms()
 }
 
 func init() {
-	supportedSignatureAlgorithmsWithCircl = append([]SignatureScheme{}, defaultSupportedSignatureAlgorithms...)
+	supportedSignatureAlgorithmsWithCircl = append([]SignatureScheme{}, defaultSupportedSignatureAlgorithms()...)
 	for _, cs := range circlSchemes {
 		supportedSignatureAlgorithmsWithCircl = append(supportedSignatureAlgorithmsWithCircl,
 			SignatureScheme(cs.scheme.(circlPki.TLSScheme).TLSIdentifier()))

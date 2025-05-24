@@ -414,12 +414,10 @@ func TestMain(m *testing.M) {
 
 	flag.Parse()
 
-	// [uTLS section begin]
-	// if *bogoMode {
-	// 	bogoShim()
-	// 	os.Exit(0)
-	// }
-	// [uTLS section end]
+	if *bogoMode {
+		bogoShim()
+		os.Exit(0)
+	}
 
 	os.Exit(runMain(m))
 }
@@ -476,32 +474,11 @@ func runMain(m *testing.M) int {
 }
 
 func testHandshake(t *testing.T, clientConfig, serverConfig *Config) (serverState, clientState ConnectionState, err error) {
-	// [uTLS SECTION BEGIN]
-	return testUtlsHandshake(t, clientConfig, serverConfig, spec)
-}
-func testUtlsHandshake(t *testing.T, clientConfig, serverConfig *Config, spec *ClientHelloSpec) (serverState, clientState ConnectionState, err error) {
-	// [uTLS SECTION END]
 	const sentinel = "SENTINEL\n"
 	c, s := localPipe(t)
 	errChan := make(chan error, 1)
 	go func() {
-		// [uTLS SECTION BEGIN]
-		var cli interface {
-			Handshake() error
-			ConnectionState() ConnectionState
-			Close() error
-			io.Reader
-		}
-		if spec != nil {
-			ucli := UClient(c, clientConfig, HelloCustom)
-			if err = ucli.ApplyPreset(spec); err != nil {
-				return
-			}
-			cli = ucli
-		} else {
-			cli = Client(c, clientConfig)
-		}
-		// [uTLS SECTION END]
+		cli := Client(c, clientConfig)
 		err := cli.Handshake()
 		if err != nil {
 			errChan <- fmt.Errorf("client: %v", err)

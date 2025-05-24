@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 )
 
 // A keyAgreement implements the client and server side of a TLS 1.0–1.2 key
@@ -130,7 +131,7 @@ func md5SHA1Hash(slices [][]byte) []byte {
 // the sigType (for earlier TLS versions). For Ed25519 signatures, which don't
 // do pre-hashing, it returns the concatenation of the slices.
 func hashForServerKeyExchange(sigType uint8, hashFunc crypto.Hash, version uint16, slices ...[]byte) []byte {
-	if sigType == signatureEd25519 || circlSchemeBySigType(sigType) != nil { // [UTLS] ported from cloudflare/go
+	if sigType == signatureEd25519 {
 		var signed []byte
 		for _, slice := range slices {
 			signed = append(signed, slice...)
@@ -214,6 +215,10 @@ func (ka *ecdheKeyAgreement) generateServerKeyExchange(config *Config, cert *Cer
 		if err != nil {
 			return nil, err
 		}
+		if sigHash == crypto.SHA1 {
+			tlssha1.Value() // ensure godebug is initialized
+			tlssha1.IncNonDefault()
+		}
 	} else {
 		sigType, sigHash, err = legacyTypeAndHashFromPublicKey(priv.Public())
 		if err != nil {
@@ -293,6 +298,10 @@ func (ka *ecdheKeyAgreement) processServerKeyExchange(config *Config, clientHell
 		return errServerKeyExchange
 	}
 
+	if !slices.Contains(clientHello.supportedCurves, curveID) {
+		return errors.New("tls: server selected unoffered curve")
+	}
+
 	if _, ok := curveForCurveID(curveID); !ok {
 		return errors.New("tls: server selected unsupported curve")
 	}
@@ -333,6 +342,10 @@ func (ka *ecdheKeyAgreement) processServerKeyExchange(config *Config, clientHell
 		sigType, sigHash, err = typeAndHashFromSignatureScheme(signatureAlgorithm)
 		if err != nil {
 			return err
+		}
+		if sigHash == crypto.SHA1 {
+			tlssha1.Value() // ensure godebug is initialized
+			tlssha1.IncNonDefault()
 		}
 	} else {
 		sigType, sigHash, err = legacyTypeAndHashFromPublicKey(cert.PublicKey)

@@ -14,12 +14,13 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"fmt"
+	"github.com/Noooste/utls/internal/boring"
+	fipsaes "github.com/Noooste/utls/internal/fips140/aes"
+	"github.com/Noooste/utls/internal/fips140/aes/gcm"
 	"hash"
+	"internal/cpu"
 	"runtime"
 	_ "unsafe" // for linkname
-
-	"github.com/Noooste/utls/internal/boring"
-	"golang.org/x/sys/cpu"
 
 	"golang.org/x/crypto/chacha20poly1305"
 )
@@ -77,8 +78,8 @@ func CipherSuites() []*CipherSuite {
 // Most applications should not use the cipher suites in this list, and should
 // only use those returned by [CipherSuites].
 func InsecureCipherSuites() []*CipherSuite {
-	// This list includes RC4, CBC_SHA256, and 3DES cipher suites. See
-	// cipherSuitesPreferenceOrder for details.
+	// This list includes legacy RSA kex, RC4, CBC_SHA256, and 3DES cipher
+	// suites. See cipherSuitesPreferenceOrder for details.
 	return []*CipherSuite{
 		{TLS_RSA_WITH_RC4_128_SHA, "TLS_RSA_WITH_RC4_128_SHA", supportedUpToTLS12, true},
 		{TLS_RSA_WITH_3DES_EDE_CBC_SHA, "TLS_RSA_WITH_3DES_EDE_CBC_SHA", supportedUpToTLS12, true},
@@ -366,7 +367,7 @@ var tdesCiphers = map[uint16]bool{
 }
 
 var (
-	// Keep in sync with crypto/internal/fips140/aes/gcm.supportsAESGCM.
+	// Keep in sync with github.com/Noooste/utls/internal/fips140/aes/gcm.supportsAESGCM.
 	hasGCMAsmAMD64 = cpu.X86.HasAES && cpu.X86.HasPCLMULQDQ && cpu.X86.HasSSE41 && cpu.X86.HasSSSE3
 	hasGCMAsmARM64 = cpu.ARM64.HasAES && cpu.ARM64.HasPMULL
 	hasGCMAsmS390X = cpu.S390X.HasAES && cpu.S390X.HasAESCTR && cpu.S390X.HasGHASH
@@ -386,9 +387,13 @@ var aesgcmCiphers = map[uint16]bool{
 	TLS_AES_256_GCM_SHA384: true,
 }
 
-// aesgcmPreferred returns whether the first known cipher in the preference list
-// is an AES-GCM cipher, implying the peer has hardware support for it.
-func aesgcmPreferred(ciphers []uint16) bool {
+// isAESGCMPreferred returns whether we have hardware support for AES-GCM, and the
+// first known cipher in the peer's preference list is an AES-GCM cipher,
+// implying the peer also has hardware support for it.
+func isAESGCMPreferred(ciphers []uint16) bool {
+	if !hasAESGCMHardwareSupport {
+		return false
+	}
 	for _, cID := range ciphers {
 		if c := cipherSuiteByID(cID); c != nil {
 			return aesgcmCiphers[cID]
@@ -522,10 +527,7 @@ func aeadAESGCM(key, noncePrefix []byte) aead {
 		aead, err = boring.NewGCMTLS(aes)
 	} else {
 		boring.Unreachable()
-		// [uTLS] SECTION BEGIN
-		// aead, err = gcm.NewGCMForTLS12(aes.(*fipsaes.Block))
-		aead, err = cipher.NewGCM(aes)
-		// [uTLS] SECTION END
+		aead, err = gcm.NewGCMForTLS12(aes.(*fipsaes.Block))
 	}
 	if err != nil {
 		panic(err)
@@ -559,10 +561,7 @@ func aeadAESGCMTLS13(key, nonceMask []byte) aead {
 		aead, err = boring.NewGCMTLS13(aes)
 	} else {
 		boring.Unreachable()
-		// [uTLS] SECTION BEGIN
-		// aead, err = gcm.NewGCMForTLS13(aes.(*fipsaes.Block))
-		aead, err = cipher.NewGCM(aes)
-		// [uTLS] SECTION END
+		aead, err = gcm.NewGCMForTLS13(aes.(*fipsaes.Block))
 	}
 	if err != nil {
 		panic(err)
@@ -654,7 +653,7 @@ func mutualCipherSuite(have []uint16, want uint16) *cipherSuite {
 }
 
 func cipherSuiteByID(id uint16) *cipherSuite {
-	for _, cipherSuite := range utlsSupportedCipherSuites {
+	for _, cipherSuite := range cipherSuites {
 		if cipherSuite.id == id {
 			return cipherSuite
 		}
