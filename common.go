@@ -1250,11 +1250,11 @@ func (c *Config) supportedVersions(isClient bool) []uint16 {
 		if fips140tls.Required() && !slices.Contains(allowedSupportedVersionsFIPS, v) {
 			continue
 		}
-		if (c == nil || c.MinVersion == 0) && v < VersionTLS12 {
-			if isClient || tls10server.Value() != "1" {
-				continue
-			}
-		}
+		//if (c == nil || c.MinVersion == 0) && v < VersionTLS12 {
+		//	if isClient || tls10server.Value() != "1" {
+		//		continue
+		//	}
+		//}
 		if isClient && c.EncryptedClientHelloConfigList != nil && v < VersionTLS13 {
 			continue
 		}

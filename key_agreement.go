@@ -215,10 +215,10 @@ func (ka *ecdheKeyAgreement) generateServerKeyExchange(config *Config, cert *Cer
 		if err != nil {
 			return nil, err
 		}
-		if sigHash == crypto.SHA1 {
-			tlssha1.Value() // ensure godebug is initialized
-			tlssha1.IncNonDefault()
-		}
+		//if sigHash == crypto.SHA1 {
+		//	tlssha1.Value() // ensure godebug is initialized
+		//	tlssha1.IncNonDefault()
+		//}
 	} else {
 		sigType, sigHash, err = legacyTypeAndHashFromPublicKey(priv.Public())
 		if err != nil {
@@ -344,8 +344,8 @@ func (ka *ecdheKeyAgreement) processServerKeyExchange(config *Config, clientHell
 			return err
 		}
 		if sigHash == crypto.SHA1 {
-			tlssha1.Value() // ensure godebug is initialized
-			tlssha1.IncNonDefault()
+			//tlssha1.Value() // ensure godebug is initialized
+			//tlssha1.IncNonDefault()
 		}
 	} else {
 		sigType, sigHash, err = legacyTypeAndHashFromPublicKey(cert.PublicKey)
