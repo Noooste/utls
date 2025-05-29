@@ -10,13 +10,13 @@ import (
 	"crypto"
 	"crypto/hkdf"
 	"crypto/hmac"
+	"crypto/mlkem"
 	"crypto/rsa"
 	"errors"
 	"fmt"
-	"github.com/Noooste/utls/internal/fips140/mlkem"
-	"github.com/Noooste/utls/internal/fips140/tls13"
 	"github.com/Noooste/utls/internal/fips140tls"
 	"github.com/Noooste/utls/internal/hpke"
+	"github.com/Noooste/utls/internal/tls13"
 	"hash"
 	"internal/byteorder"
 	"io"
@@ -31,7 +31,7 @@ import (
 const maxClientPSKIdentities = 5
 
 type echServerContext struct {
-	hpkeContext *hpke.Recipient
+	hpkeContext *hpke.Receipient
 	configID    uint8
 	ciphersuite echCipher
 	transcript  hash.Hash

@@ -10,11 +10,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Noooste/utls/internal/fips140tls"
 	"io"
 
-	"github.com/Noooste/utls/internal/fips140/tls13"
-	"github.com/Noooste/utls/internal/fips140tls"
 	"github.com/Noooste/utls/internal/hpke"
+	"github.com/Noooste/utls/internal/tls13"
 	"github.com/andybalholm/brotli"
 	"github.com/klauspost/compress/zstd"
 )

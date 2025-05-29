@@ -5,12 +5,12 @@
 package tls
 
 import (
+	"crypto/mlkem"
 	crand "crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/Noooste/utls/internal/fips140/mlkem"
 	"io"
 	"math"
 	"math/big"

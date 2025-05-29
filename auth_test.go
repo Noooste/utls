@@ -6,7 +6,7 @@ package tls
 
 import (
 	"crypto"
-	"github.com/Noooste/utls/internal/fips140tls"
+	"github.com/Noooste/utls/internal/tls"
 	"os"
 	"testing"
 )

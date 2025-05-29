@@ -7,7 +7,7 @@
 package fipsonly
 
 import (
-	"github.com/Noooste/utls/internal/fips140tls"
+	"crypto/tls/internal/fips140tls"
 	"testing"
 )
 

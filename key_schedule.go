@@ -7,9 +7,9 @@ package tls
 import (
 	"crypto/ecdh"
 	"crypto/hmac"
+	"crypto/mlkem"
 	"errors"
-	"github.com/Noooste/utls/internal/fips140/mlkem"
-	"github.com/Noooste/utls/internal/fips140/tls13"
+	"github.com/Noooste/utls/internal/tls13"
 	"hash"
 	"io"
 )

@@ -13,7 +13,7 @@ import (
 	"crypto/sha512"
 	"errors"
 	"fmt"
-	"github.com/Noooste/utls/internal/fips140/tls12"
+	"github.com/Noooste/utls/internal/tls12"
 	"hash"
 )
 

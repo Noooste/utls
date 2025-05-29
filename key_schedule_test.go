@@ -8,7 +8,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
-	"github.com/Noooste/utls/internal/fips140/tls13"
+	"github.com/Noooste/utls/internal/tls13"
 	"strings"
 	"testing"
 	"unicode"

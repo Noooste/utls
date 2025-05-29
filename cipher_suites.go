@@ -14,9 +14,8 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"fmt"
+
 	"github.com/Noooste/utls/internal/boring"
-	fipsaes "github.com/Noooste/utls/internal/fips140/aes"
-	"github.com/Noooste/utls/internal/fips140/aes/gcm"
 	"hash"
 	"internal/cpu"
 	"runtime"
@@ -367,7 +366,7 @@ var tdesCiphers = map[uint16]bool{
 }
 
 var (
-	// Keep in sync with github.com/Noooste/utls/internal/fips140/aes/gcm.supportsAESGCM.
+	// Keep in sync with github.com/Noooste/utls/internal/aes/gcm.supportsAESGCM.
 	hasGCMAsmAMD64 = cpu.X86.HasAES && cpu.X86.HasPCLMULQDQ && cpu.X86.HasSSE41 && cpu.X86.HasSSSE3
 	hasGCMAsmARM64 = cpu.ARM64.HasAES && cpu.ARM64.HasPMULL
 	hasGCMAsmS390X = cpu.S390X.HasAES && cpu.S390X.HasAESCTR && cpu.S390X.HasGHASH
@@ -527,7 +526,7 @@ func aeadAESGCM(key, noncePrefix []byte) aead {
 		aead, err = boring.NewGCMTLS(aes)
 	} else {
 		boring.Unreachable()
-		aead, err = gcm.NewGCMForTLS12(aes.(*fipsaes.Block))
+		//aead, err = gcm.NewGCMForTLS12(aes.(*fipsaes.Block))
 	}
 	if err != nil {
 		panic(err)
@@ -561,7 +560,10 @@ func aeadAESGCMTLS13(key, nonceMask []byte) aead {
 		aead, err = boring.NewGCMTLS13(aes)
 	} else {
 		boring.Unreachable()
-		aead, err = gcm.NewGCMForTLS13(aes.(*fipsaes.Block))
+		// [uTLS] SECTION BEGIN
+		// aead, err = gcm.NewGCMForTLS13(aes.(*fipsaes.Block))
+		aead, err = cipher.NewGCM(aes)
+		// [uTLS] SECTION END
 	}
 	if err != nil {
 		panic(err)

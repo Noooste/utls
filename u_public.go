@@ -7,8 +7,8 @@ package tls
 import (
 	"crypto"
 	"crypto/ecdh"
+	"crypto/mlkem"
 	"crypto/x509"
-	"github.com/Noooste/utls/internal/fips140/mlkem"
 	"hash"
 	"time"
 
