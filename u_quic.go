@@ -49,7 +49,7 @@ func (q *UQUICConn) Start(ctx context.Context) error {
 	}
 	q.conn.quic.started = true
 	if q.conn.config.MinVersion < VersionTLS13 {
-		return quicError(errors.New("tls: Config MinVersion must be at least TLS 1.13"))
+		return quicError(errors.New("tls: Config MinVersion must be at least TLS 1.3"))
 	}
 	go q.conn.HandshakeContext(ctx)
 	if _, ok := <-q.conn.quic.blockedc; !ok {
@@ -70,6 +70,11 @@ func (q *UQUICConn) NextEvent() QUICEvent {
 		// Write over some of the previous event's data,
 		// to catch callers erroniously retaining it.
 		qs.events[last].Data[0] = 0
+	}
+	if qs.nextEvent >= len(qs.events) && qs.waitingForDrain {
+		qs.waitingForDrain = false
+		<-qs.signalc
+		<-qs.blockedc
 	}
 	if qs.nextEvent >= len(qs.events) {
 		qs.events = qs.events[:0]
@@ -134,7 +139,7 @@ func (q *UQUICConn) HandleData(level QUICEncryptionLevel, data []byte) error {
 }
 
 // SendSessionTicket sends a session ticket to the client.
-// It produces connection events, which may be read with NextEvent.
+// It produces connection events, which may be read with [QUICConn.NextEvent].
 // Currently, it can only be called once.
 func (q *UQUICConn) SendSessionTicket(opts QUICSessionTicketOptions) error {
 	c := q.conn
@@ -149,6 +154,24 @@ func (q *UQUICConn) SendSessionTicket(opts QUICSessionTicketOptions) error {
 	}
 	q.sessionTicketSent = true
 	return quicError(c.sendSessionTicket(opts.EarlyData, opts.Extra))
+}
+
+// StoreSession stores a session previously received in a QUICStoreSession event
+// in the ClientSessionCache.
+// The application may process additional events or modify the SessionState
+// before storing the session.
+func (q *UQUICConn) StoreSession(session *SessionState) error {
+	c := q.conn
+	if !c.isClient {
+		return quicError(errors.New("tls: StoreSessionTicket called on the server"))
+	}
+	cacheKey := c.clientSessionCacheKey()
+	if cacheKey == "" {
+		return nil
+	}
+	cs := &ClientSessionState{session: session}
+	c.config.ClientSessionCache.Put(cacheKey, cs)
+	return nil
 }
 
 // ConnectionState returns basic TLS details about the connection.
