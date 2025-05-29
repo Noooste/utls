@@ -5,7 +5,6 @@
 package tls
 
 import (
-	"internal/godebug"
 	"slices"
 	_ "unsafe" // for linkname
 )
@@ -13,40 +12,40 @@ import (
 // Defaults are collected in this file to allow distributions to more easily patch
 // them to apply local policies.
 
-var tlsmlkem = godebug.New("tlsmlkem")
+//var tlsmlkem = godebug.New("tlsmlkem")
 
 // defaultCurvePreferences is the default set of supported key exchanges, as
 // well as the preference order.
 func defaultCurvePreferences() []CurveID {
-	if tlsmlkem.Value() == "0" {
-		return []CurveID{X25519, CurveP256, CurveP384, CurveP521}
-	}
+	//if tlsmlkem.Value() == "0" {
+	//	return []CurveID{X25519, CurveP256, CurveP384, CurveP521}
+	//}
 	return []CurveID{X25519MLKEM768, X25519, CurveP256, CurveP384, CurveP521}
 }
 
-var tlssha1 = godebug.New("tlssha1")
+//var tlssha1 = godebug.New("tlssha1")
 
 // defaultSupportedSignatureAlgorithms returns the signature and hash algorithms that
 // the code advertises and supports in a TLS 1.2+ ClientHello and in a TLS 1.2+
 // CertificateRequest. The two fields are merged to match with TLS 1.3.
 // Note that in TLS 1.2, the ECDSA algorithms are not constrained to P-256, etc.
 func defaultSupportedSignatureAlgorithms() []SignatureScheme {
-	if tlssha1.Value() == "1" {
-		return []SignatureScheme{
-			PSSWithSHA256,
-			ECDSAWithP256AndSHA256,
-			Ed25519,
-			PSSWithSHA384,
-			PSSWithSHA512,
-			PKCS1WithSHA256,
-			PKCS1WithSHA384,
-			PKCS1WithSHA512,
-			ECDSAWithP384AndSHA384,
-			ECDSAWithP521AndSHA512,
-			PKCS1WithSHA1,
-			ECDSAWithSHA1,
-		}
-	}
+	//if tlssha1.Value() == "1" {
+	//	return []SignatureScheme{
+	//		PSSWithSHA256,
+	//		ECDSAWithP256AndSHA256,
+	//		Ed25519,
+	//		PSSWithSHA384,
+	//		PSSWithSHA512,
+	//		PKCS1WithSHA256,
+	//		PKCS1WithSHA384,
+	//		PKCS1WithSHA512,
+	//		ECDSAWithP384AndSHA384,
+	//		ECDSAWithP521AndSHA512,
+	//		PKCS1WithSHA1,
+	//		ECDSAWithSHA1,
+	//	}
+	//}
 	return []SignatureScheme{
 		PSSWithSHA256,
 		ECDSAWithP256AndSHA256,
@@ -87,8 +86,8 @@ func defaultSupportedSignatureAlgorithmsCert() []SignatureScheme {
 	}
 }
 
-var tlsrsakex = godebug.New("tlsrsakex")
-var tls3des = godebug.New("tls3des")
+//var tlsrsakex = godebug.New("tlsrsakex")
+//var tls3des = godebug.New("tls3des")
 
 func supportedCipherSuites(aesGCMPreferred bool) []uint16 {
 	if aesGCMPreferred {
@@ -101,9 +100,9 @@ func supportedCipherSuites(aesGCMPreferred bool) []uint16 {
 func defaultCipherSuites(aesGCMPreferred bool) []uint16 {
 	cipherSuites := supportedCipherSuites(aesGCMPreferred)
 	return slices.DeleteFunc(cipherSuites, func(c uint16) bool {
-		return disabledCipherSuites[c] ||
-			tlsrsakex.Value() != "1" && rsaKexCiphers[c] ||
-			tls3des.Value() != "1" && tdesCiphers[c]
+		return disabledCipherSuites[c]
+		//tlsrsakex.Value() != "1" && rsaKexCiphers[c] ||
+		//tls3des.Value() != "1" && tdesCiphers[c]
 	})
 }
 

@@ -14,10 +14,10 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"fmt"
+	"golang.org/x/sys/cpu"
 
 	"github.com/Noooste/utls/internal/boring"
 	"hash"
-	"internal/cpu"
 	"runtime"
 	_ "unsafe" // for linkname
 

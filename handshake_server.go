@@ -14,9 +14,9 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"github.com/Noooste/utls/internal/byteorder"
 	"github.com/Noooste/utls/internal/fips140tls"
 	"hash"
-	"internal/byteorder"
 	"io"
 	"time"
 )
@@ -210,8 +210,8 @@ func (c *Conn) readClientHello(ctx context.Context) (*clientHelloMsg, *echServer
 	}
 
 	if c.config.MinVersion == 0 && c.vers < VersionTLS12 {
-		tls10server.Value() // ensure godebug is initialized
-		tls10server.IncNonDefault()
+		//tls10server.Value() // ensure godebug is initialized
+		//tls10server.IncNonDefault()
 	}
 
 	return clientHello, ech, nil
@@ -408,12 +408,12 @@ func (hs *serverHandshakeState) pickCipherSuite() error {
 	c.cipherSuite = hs.suite.id
 
 	if c.config.CipherSuites == nil && !fips140tls.Required() && rsaKexCiphers[hs.suite.id] {
-		tlsrsakex.Value() // ensure godebug is initialized
-		tlsrsakex.IncNonDefault()
+		//tlsrsakex.Value() // ensure godebug is initialized
+		//tlsrsakex.IncNonDefault()
 	}
 	if c.config.CipherSuites == nil && !fips140tls.Required() && tdesCiphers[hs.suite.id] {
-		tls3des.Value() // ensure godebug is initialized
-		tls3des.IncNonDefault()
+		//tls3des.Value() // ensure godebug is initialized
+		//tls3des.IncNonDefault()
 	}
 
 	for _, id := range hs.clientHello.cipherSuites {
@@ -773,8 +773,8 @@ func (hs *serverHandshakeState) doFullHandshake() error {
 				return c.sendAlert(alertInternalError)
 			}
 			if sigHash == crypto.SHA1 {
-				tlssha1.Value() // ensure godebug is initialized
-				tlssha1.IncNonDefault()
+				//tlssha1.Value() // ensure godebug is initialized
+				//tlssha1.IncNonDefault()
 			}
 		} else {
 			sigType, sigHash, err = legacyTypeAndHashFromPublicKey(pub)

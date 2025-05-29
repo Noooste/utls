@@ -16,16 +16,14 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"github.com/Noooste/utls/internal/byteorder"
 	"github.com/Noooste/utls/internal/fips140tls"
 	"github.com/Noooste/utls/internal/hpke"
 	"github.com/Noooste/utls/internal/tls13"
 	"hash"
-	"internal/byteorder"
-	"internal/godebug"
 	"io"
 	"net"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -654,12 +652,12 @@ func (hs *clientHandshakeState) pickCipherSuite() error {
 	}
 
 	if hs.c.config.CipherSuites == nil && !fips140tls.Required() && rsaKexCiphers[hs.suite.id] {
-		tlsrsakex.Value() // ensure godebug is initialized
-		tlsrsakex.IncNonDefault()
+		//tlsrsakex.Value() // ensure godebug is initialized
+		//tlsrsakex.IncNonDefault()
 	}
 	if hs.c.config.CipherSuites == nil && !fips140tls.Required() && tdesCiphers[hs.suite.id] {
-		tls3des.Value() // ensure godebug is initialized
-		tls3des.IncNonDefault()
+		//tls3des.Value() // ensure godebug is initialized
+		//tls3des.IncNonDefault()
 	}
 
 	hs.c.cipherSuite = hs.suite.id
@@ -831,8 +829,8 @@ func (hs *clientHandshakeState) doFullHandshake() error {
 			certVerify.hasSignatureAlgorithm = true
 			certVerify.signatureAlgorithm = signatureAlgorithm
 			if sigHash == crypto.SHA1 {
-				tlssha1.Value() // ensure godebug is initialized
-				tlssha1.IncNonDefault()
+				//tlssha1.Value() // ensure godebug is initialized
+				//tlssha1.IncNonDefault()
 			}
 		} else {
 			sigType, sigHash, err = legacyTypeAndHashFromPublicKey(key.Public())
@@ -1100,17 +1098,17 @@ func (hs *clientHandshakeState) sendFinished(out []byte) error {
 // to verify the signatures of during a TLS handshake.
 const defaultMaxRSAKeySize = 8192
 
-var tlsmaxrsasize = godebug.New("tlsmaxrsasize")
+//var tlsmaxrsasize = godebug.New("tlsmaxrsasize")
 
 func checkKeySize(n int) (max int, ok bool) {
-	if v := tlsmaxrsasize.Value(); v != "" {
-		if max, err := strconv.Atoi(v); err == nil {
-			if (n <= max) != (n <= defaultMaxRSAKeySize) {
-				tlsmaxrsasize.IncNonDefault()
-			}
-			return max, n <= max
-		}
-	}
+	//if v := tlsmaxrsasize.Value(); v != "" {
+	//	if max, err := strconv.Atoi(v); err == nil {
+	//		if (n <= max) != (n <= defaultMaxRSAKeySize) {
+	//			tlsmaxrsasize.IncNonDefault()
+	//		}
+	//		return max, n <= max
+	//	}
+	//}
 	return defaultMaxRSAKeySize, n <= defaultMaxRSAKeySize
 }
 

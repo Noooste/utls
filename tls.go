@@ -34,7 +34,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"internal/godebug"
 	"net"
 	"os"
 	"strings"
@@ -256,7 +255,7 @@ func LoadX509KeyPair(certFile, keyFile string) (Certificate, error) {
 	return X509KeyPair(certPEMBlock, keyPEMBlock)
 }
 
-var x509keypairleaf = godebug.New("x509keypairleaf")
+//var x509keypairleaf = godebug.New("x509keypairleaf")
 
 // X509KeyPair parses a public/private key pair from a pair of
 // PEM encoded data. On successful return, Certificate.Leaf will be populated.
@@ -318,11 +317,11 @@ func X509KeyPair(certPEMBlock, keyPEMBlock []byte) (Certificate, error) {
 		return fail(err)
 	}
 
-	if x509keypairleaf.Value() != "0" {
-		cert.Leaf = x509Cert
-	} else {
-		x509keypairleaf.IncNonDefault()
-	}
+	//if x509keypairleaf.Value() != "0" {
+	//	cert.Leaf = x509Cert
+	//} else {
+	//	x509keypairleaf.IncNonDefault()
+	//}
 
 	cert.PrivateKey, err = parsePrivateKey(keyDERBlock.Bytes)
 	if err != nil {

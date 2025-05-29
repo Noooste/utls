@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/Noooste/utls/internal/fips140tls"
-	"internal/godebug"
 	"io"
 	"net"
 	"slices"
@@ -1241,7 +1240,7 @@ var supportedVersions = []uint16{
 const roleClient = true
 const roleServer = false
 
-var tls10server = godebug.New("tls10server")
+//var tls10server = godebug.New("tls10server")
 
 // supportedVersions returns the list of supported TLS versions, sorted from
 // highest to lowest (and hence also in preference order).
