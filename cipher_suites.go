@@ -526,7 +526,10 @@ func aeadAESGCM(key, noncePrefix []byte) aead {
 		aead, err = boring.NewGCMTLS(aes)
 	} else {
 		boring.Unreachable()
-		//aead, err = gcm.NewGCMForTLS12(aes.(*fipsaes.Block))
+		// [uTLS] SECTION BEGIN
+		// aead, err = gcm.NewGCMForTLS12(aes.(*fipsaes.Block))
+		aead, err = cipher.NewGCM(aes)
+		// [uTLS] SECTION END
 	}
 	if err != nil {
 		panic(err)
