@@ -18,7 +18,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"github.com/Noooste/utls/internal/tls"
+	"github.com/Noooste/utls/internal/fips140tls"
 	"internal/byteorder"
 	"io"
 	"math/big"

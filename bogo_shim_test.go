@@ -12,7 +12,6 @@ import (
 	"encoding/pem"
 	"flag"
 	"fmt"
-	"github.com/Noooste/utls/internal/cryptotest"
 	"internal/byteorder"
 	"internal/testenv"
 	"io"
@@ -437,7 +436,7 @@ func TestBogoSuite(t *testing.T) {
 		bogoDir = *bogoLocalDir
 	} else {
 		const boringsslModVer = "v0.0.0-20241120195446-5cce3fbd23e1"
-		bogoDir = cryptotest.FetchModule(t, "boringssl.googlesource.com/boringssl.git", boringsslModVer)
+		//bogoDir = cryptotest.FetchModule(t, "boringssl.googlesource.com/boringssl.git", boringsslModVer)
 	}
 
 	cwd, err := os.Getwd()
