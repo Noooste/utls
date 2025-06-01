@@ -51,8 +51,8 @@ func ExtensionFromID(id uint16) TLSExtension {
 		return &SessionTicketExtension{}
 	case extensionPreSharedKey:
 		return (PreSharedKeyExtension)(&FakePreSharedKeyExtension{}) // To use the result, caller needs further inspection to decide between Fake or Utls.
-	// case extensionEarlyData:
-	// 	return &EarlyDataExtension{}
+	case extensionEarlyData:
+		return &EarlyDataExtension{}
 	case extensionSupportedVersions:
 		return &SupportedVersionsExtension{}
 	// case extensionCookie:
@@ -1943,5 +1943,61 @@ func (e *FakeDelegatedCredentialsExtension) UnmarshalJSON(data []byte) error {
 			return fmt.Errorf("unknown delegated credentials signature scheme: %s", sigScheme)
 		}
 	}
+	return nil
+}
+
+type EarlyDataExtension struct {
+	Data bool
+}
+
+func (e *EarlyDataExtension) writeToUConn(uc *UConn) error {
+	uc.HandshakeState.Hello.EarlyData = e.Data
+	return nil
+}
+
+func (e *EarlyDataExtension) Len() int {
+	return 4 + 1 // extension id + length + early data value
+}
+
+func (e *EarlyDataExtension) Read(b []byte) (int, error) {
+	if len(b) < e.Len() {
+		return 0, io.ErrShortBuffer
+	}
+
+	b[0] = byte(extensionEarlyData >> 8)
+	b[1] = byte(extensionEarlyData & 0xff)
+	b[2] = byte(1 >> 8) // length of the early data value
+	b[3] = byte(1)      // length of the early data value
+	if e.Data {
+		b[4] = 1 // early data value is true
+	} else {
+		b[4] = 0 // early data value is false
+	}
+
+	return e.Len(), io.EOF
+}
+
+func (e *EarlyDataExtension) Write(b []byte) (int, error) {
+	if len(b) < 1 {
+		return 0, io.ErrShortBuffer
+	}
+
+	if b[0] < 0 || b[0] > 1 {
+		return 0, errors.New("invalid early data value")
+	}
+
+	e.Data = b[0] == 1
+	return len(b), nil
+}
+
+func (e *EarlyDataExtension) UnmarshalJSON(b []byte) error {
+	var jsonObj struct {
+		Data bool `json:"early_data"`
+	}
+	if err := json.Unmarshal(b, &jsonObj); err != nil {
+		return err
+	}
+
+	e.Data = jsonObj.Data
 	return nil
 }
