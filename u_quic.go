@@ -210,3 +210,21 @@ func (uc *UConn) QUICGetTransportParameters() ([]byte, error) {
 	}
 	return uc.quic.transportParams, nil
 }
+
+// StoreSession stores a session previously received in a QUICStoreSession event
+// in the ClientSessionCache.
+// The application may process additional events or modify the SessionState
+// before storing the session.
+func (uc *UQUICConn) StoreSession(session *SessionState) error {
+	c := uc.conn
+	if !c.isClient {
+		return quicError(errors.New("tls: StoreSessionTicket called on the server"))
+	}
+	cacheKey := c.clientSessionCacheKey()
+	if cacheKey == "" {
+		return nil
+	}
+	cs := &ClientSessionState{session: session}
+	c.config.ClientSessionCache.Put(cacheKey, cs)
+	return nil
+}
