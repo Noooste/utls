@@ -51,7 +51,7 @@ type GREASEEncryptedClientHelloExtension struct {
 	cipherSuite           HPKESymmetricCipherSuite // randomly picked from CandidateCipherSuites or generated if empty
 	CandidateConfigIds    []uint8
 	configId              uint8    // randomly picked from CandidateConfigIds or generated if empty
-	EncapsulatedKey       []byte   // if empty, will generate random bytes
+	EncapsulatedKey       []byte   // if empty, will generate Random bytes
 	CandidatePayloadLens  []uint16 // Pre-encryption. If 0, will pick 128(+16=144)
 	payload               []byte   // payload should be calculated ONCE and stored here, HRR will reuse this
 
@@ -62,22 +62,22 @@ type GREASEEncryptedClientHelloExtension struct {
 
 type GREASEECHExtension = GREASEEncryptedClientHelloExtension // alias
 
-// init initializes the GREASEEncryptedClientHelloExtension with random values if they are not set.
+// init initializes the GREASEEncryptedClientHelloExtension with Random values if they are not set.
 //
 // Based on cloudflare/go's echGenerateGreaseExt()
 func (g *GREASEEncryptedClientHelloExtension) init() error {
 	var initErr error
 	g.initOnce.Do(func() {
-		// Set the config_id field to a random byte.
+		// Set the config_id field to a Random byte.
 		//
 		// Note: must not reuse this extension unless for HRR. It is required
-		// to generate new random bytes for config_id for each new ClientHello,
+		// to generate new Random bytes for config_id for each new ClientHello,
 		// but reuse the same config_id for HRR.
 		if len(g.CandidateConfigIds) == 0 {
 			var b []byte = make([]byte, 1)
 			_, err := rand.Read(b[:])
 			if err != nil {
-				initErr = fmt.Errorf("error generating random byte for config_id: %w", err)
+				initErr = fmt.Errorf("error generating Random byte for config_id: %w", err)
 				return
 			}
 			g.configId = b[0]
@@ -85,7 +85,7 @@ func (g *GREASEEncryptedClientHelloExtension) init() error {
 			// randomly pick one from the list
 			rndIndex, err := rand.Int(rand.Reader, big.NewInt(int64(len(g.CandidateConfigIds))))
 			if err != nil {
-				initErr = fmt.Errorf("error generating random index for config_id: %w", err)
+				initErr = fmt.Errorf("error generating Random index for config_id: %w", err)
 				return
 			}
 			g.configId = g.CandidateConfigIds[rndIndex.Int64()]
@@ -102,7 +102,7 @@ func (g *GREASEEncryptedClientHelloExtension) init() error {
 			// randomly pick one from the list
 			rndIndex, err := rand.Int(rand.Reader, big.NewInt(int64(len(g.CandidateCipherSuites))))
 			if err != nil {
-				initErr = fmt.Errorf("error generating random index for cipher_suite: %w", err)
+				initErr = fmt.Errorf("error generating Random index for cipher_suite: %w", err)
 				return
 			}
 			g.cipherSuite = HPKESymmetricCipherSuite{
@@ -113,7 +113,7 @@ func (g *GREASEEncryptedClientHelloExtension) init() error {
 		}
 
 		if len(g.EncapsulatedKey) == 0 {
-			// use default random key from cloudflare/go
+			// use default Random key from cloudflare/go
 			kem := hpke.KEM_X25519_HKDF_SHA256
 
 			pk, err := kem.Scheme().UnmarshalBinaryPublicKey(dummyX25519PublicKey)
@@ -142,7 +142,7 @@ func (g *GREASEEncryptedClientHelloExtension) init() error {
 			// randomly pick one from the list
 			rndIndex, err := rand.Int(rand.Reader, big.NewInt(int64(len(g.CandidatePayloadLens))))
 			if err != nil {
-				initErr = fmt.Errorf("error generating random index for payload length: %w", err)
+				initErr = fmt.Errorf("error generating Random index for payload length: %w", err)
 				return
 			}
 
@@ -169,7 +169,7 @@ func (g *GREASEEncryptedClientHelloExtension) randomizePayload(encodedHelloInner
 
 // writeToUConn implements TLSExtension.
 //
-// For ECH extensions, writeToUConn simply points the ech field in UConn to the extension.
+// For ECH Extensions, writeToUConn simply points the ech field in UConn to the extension.
 func (g *GREASEEncryptedClientHelloExtension) writeToUConn(uconn *UConn) error {
 	uconn.ech = g
 	return uconn.MarshalClientHelloNoECH()

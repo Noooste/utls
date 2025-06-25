@@ -137,7 +137,7 @@ func (m *utlsClientEncryptedExtensionsMsg) unmarshal(data []byte) bool {
 			m.applicationSettingsCodepoint = extension
 			m.applicationSettings = []byte(extData)
 		default:
-			// Unknown extensions are illegal in EncryptedExtensions.
+			// Unknown Extensions are illegal in EncryptedExtensions.
 			return false
 		}
 	}

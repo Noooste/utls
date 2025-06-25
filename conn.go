@@ -25,6 +25,8 @@ import (
 // A Conn represents a secured connection.
 // It implements the net.Conn interface.
 type Conn struct {
+	ClientHello *clientHelloMsg
+
 	// constant
 	conn        net.Conn
 	isClient    bool
@@ -465,7 +467,7 @@ func (hc *halfConn) decrypt(record []byte) ([]byte, recordType, error) {
 }
 
 // sliceForAppend extends the input slice by n bytes. head is the full extended
-// slice, while tail is the appended part. If the original slice has sufficient
+// slice, while tail is the appended part. If the Original slice has sufficient
 // capacity no allocation is performed.
 func sliceForAppend(in []byte, n int) (head, tail []byte) {
 	if total := len(in) + n; cap(in) >= total {
@@ -490,8 +492,8 @@ func (hc *halfConn) encrypt(record, payload []byte, rand io.Reader) ([]byte, err
 		record, explicitNonce = sliceForAppend(record, explicitNonceLen)
 		if _, isCBC := hc.cipher.(cbcMode); !isCBC && explicitNonceLen < 16 {
 			// The AES-GCM construction in TLS has an explicit nonce so that the
-			// nonce can be random. However, the nonce is only 8 bytes which is
-			// too small for a secure, random nonce. Therefore we use the
+			// nonce can be Random. However, the nonce is only 8 bytes which is
+			// too small for a secure, Random nonce. Therefore we use the
 			// sequence number as the nonce. The 3DES-CBC construction also has
 			// an 8 bytes nonce but its nonces must be unpredictable (see RFC
 			// 5246, Appendix F.3), forcing us to use randomness. That's not
@@ -748,7 +750,7 @@ func (c *Conn) readRecordOrCCS(expectChangeCipherSpec bool) error {
 		// In TLS 1.3, change_cipher_spec records are ignored until the
 		// Finished. See RFC 8446, Appendix D.4. Note that according to Section
 		// 5, a server can send a ChangeCipherSpec before its ServerHello, when
-		// c.vers is still unset. That's not useful though and suspicious if the
+		// c.Vers is still unset. That's not useful though and suspicious if the
 		// server then selects a lower protocol version, so don't allow that.
 		if c.vers == VersionTLS13 && !handshakeComplete {
 			return c.retryReadRecord(expectChangeCipherSpec)

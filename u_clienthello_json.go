@@ -14,7 +14,7 @@ var ErrUnknownExtension = errors.New("extension name is unknown to the dictionar
 type ClientHelloSpecJSONUnmarshaler struct {
 	CipherSuites       *CipherSuitesJSONUnmarshaler       `json:"cipher_suites"`
 	CompressionMethods *CompressionMethodsJSONUnmarshaler `json:"compression_methods"`
-	Extensions         *TLSExtensionsJSONUnmarshaler      `json:"extensions"`
+	Extensions         *TLSExtensionsJSONUnmarshaler      `json:"Extensions"`
 	TLSVersMin         uint16                             `json:"min_vers,omitempty"` // optional
 	TLSVersMax         uint16                             `json:"max_vers,omitempty"` // optional
 }
@@ -85,7 +85,7 @@ func (c *CompressionMethodsJSONUnmarshaler) CompressionMethods() []uint8 {
 }
 
 type TLSExtensionsJSONUnmarshaler struct {
-	AllowUnknownExt bool // if set, unknown extensions will be added as GenericExtension, without recovering ext payload
+	AllowUnknownExt bool // if set, unknown Extensions will be added as GenericExtension, without recovering ext payload
 	UseRealPSK      bool // if set, PSK extension will be real PSK extension, otherwise it will be fake PSK extension
 	extensions      []TLSExtensionJSON
 }
@@ -135,7 +135,7 @@ func (e *TLSExtensionsJSONUnmarshaler) UnmarshalJSON(jsonStr []byte) error {
 		}
 	}
 
-	// unmashal extensions
+	// unmashal Extensions
 	for idx, ext := range exts {
 		// json.Unmarshal will call the UnmarshalJSON method of the extension
 		if err := json.Unmarshal(accepters[idx].origJsonInput, ext); err != nil {

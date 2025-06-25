@@ -107,7 +107,7 @@ ConfigsLoop:
 			continue ConfigsLoop
 		}
 
-		/**** cloudflare/go original ****/
+		/**** cloudflare/go Original ****/
 		// if !readConfigContents(&contents, &config) {
 		// 	return nil, errors.New("error parsing config contents")
 		// }
@@ -117,7 +117,7 @@ ConfigsLoop:
 			return nil, fmt.Errorf("error parsing config contents: %s", err)
 		}
 
-		/**** cloudflare/go original ****/
+		/**** cloudflare/go Original ****/
 		// kem := hpke.KEM(config.kemId)
 		// if !kem.IsValid() {
 		// 	continue ConfigsLoop

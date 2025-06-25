@@ -865,7 +865,7 @@ func (e *SCTExtension) Write(_ []byte) (int, error) {
 	return 0, nil
 }
 
-// GenericExtension allows to include in ClientHello arbitrary unsupported extensions.
+// GenericExtension allows to include in ClientHello arbitrary unsupported Extensions.
 // It is not defined in TLS RFCs nor by IANA.
 // If a server echoes this extension back, the handshake will likely fail due to no further support.
 type GenericExtension struct {
@@ -965,7 +965,7 @@ const (
 	ssl_grease_last_index = ssl_grease_ticket_extension
 )
 
-// it is responsibility of user not to generate multiple grease extensions with same value
+// it is responsibility of user not to generate multiple grease Extensions with same value
 type UtlsGREASEExtension struct {
 	Value uint16
 	Body  []byte // in Chrome first grease has empty body, second grease has a single zero byte
@@ -977,10 +977,10 @@ func (e *UtlsGREASEExtension) writeToUConn(uc *UConn) error {
 
 // will panic if ssl_grease_last_index[index] is out of bounds.
 func GetBoringGREASEValue(greaseSeed [ssl_grease_last_index]uint16, index int) uint16 {
-	// GREASE value is back from deterministic to random.
+	// GREASE value is back from deterministic to Random.
 	// https://github.com/google/boringssl/blob/a365138ac60f38b64bfc608b493e0f879845cb88/ssl/handshake_client.c#L530
 	ret := uint16(greaseSeed[index])
-	/* This generates a random value of the form 0xωaωa, for all 0 ≤ ω < 16. */
+	/* This generates a Random value of the form 0xωaωa, for all 0 ≤ ω < 16. */
 	ret = (ret & 0xf0) | 0x0a
 	ret |= ret << 8
 	return ret

@@ -47,7 +47,7 @@ func TestUTLSMarshalNoOp(t *testing.T) {
 	if err != nil {
 		t.Errorf("Got error: %s; expected to succeed", err)
 	}
-	msg.original = []byte(str)
+	msg.Original = []byte(str)
 	marshalledHello, err := msg.marshal()
 	if err != nil {
 		t.Errorf("clientHelloMsg.marshal() returned error: %s", err.Error())

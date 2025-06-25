@@ -60,7 +60,7 @@ func (hs *clientHandshakeStateTLS13) handshake() error {
 	}
 
 	// Consistency check on the presence of a keyShare and its parameters.
-	if hs.keyShareKeys == nil || hs.keyShareKeys.ecdhe == nil || len(hs.hello.keyShares) == 0 {
+	if hs.keyShareKeys == nil || hs.keyShareKeys.ecdhe == nil || len(hs.hello.KeyShares) == 0 {
 		return c.sendAlert(alertInternalError)
 	}
 
@@ -104,7 +104,7 @@ func (hs *clientHandshakeStateTLS13) handshake() error {
 		confTranscript.Write(make([]byte, 8))
 		confTranscript.Write(hs.serverHello.original[38:])
 		acceptConfirmation := tls13.ExpandLabel(hs.suite.hash.New,
-			hkdf.Extract(hs.suite.hash.New, hs.echContext.innerHello.random, nil),
+			hkdf.Extract(hs.suite.hash.New, hs.echContext.innerHello.Random, nil),
 			"ech accept confirmation",
 			confTranscript.Sum(nil),
 			8,
@@ -120,7 +120,7 @@ func (hs *clientHandshakeStateTLS13) handshake() error {
 				return errors.New("tls: unexpected encrypted client hello extension in server hello despite ECH being accepted")
 			}
 
-			if hs.hello.serverName == "" && hs.serverHello.serverNameAck {
+			if hs.hello.ServerName == "" && hs.serverHello.serverNameAck {
 				c.sendAlert(alertUnsupportedExtension)
 				return errors.New("tls: unexpected server_name extension in server hello")
 			}
@@ -218,7 +218,7 @@ func (hs *clientHandshakeStateTLS13) checkServerHelloOrHRR() error {
 		return errors.New("tls: server selected unsupported compression format")
 	}
 
-	selectedSuite := mutualCipherSuiteTLS13(hs.hello.cipherSuites, hs.serverHello.cipherSuite)
+	selectedSuite := mutualCipherSuiteTLS13(hs.hello.CipherSuites, hs.serverHello.cipherSuite)
 	if hs.suite != nil && selectedSuite != hs.suite {
 		c.sendAlert(alertIllegalParameter)
 		return errors.New("tls: server changed cipher suite after a HelloRetryRequest")
@@ -283,7 +283,7 @@ func (hs *clientHandshakeStateTLS13) processHelloRetryRequest() error {
 			hrrHello = bytes.Replace(hrrHello, hs.serverHello.encryptedClientHello, make([]byte, 8), 1)
 			confTranscript.Write(hrrHello)
 			acceptConfirmation := tls13.ExpandLabel(hs.suite.hash.New,
-				hkdf.Extract(hs.suite.hash.New, hs.echContext.innerHello.random, nil),
+				hkdf.Extract(hs.suite.hash.New, hs.echContext.innerHello.Random, nil),
 				"hrr ech accept confirmation",
 				confTranscript.Sum(nil),
 				8,
@@ -305,7 +305,7 @@ func (hs *clientHandshakeStateTLS13) processHelloRetryRequest() error {
 		return errors.New("tls: unexpected encrypted client hello extension in serverHello")
 	}
 
-	// The only HelloRetryRequest extensions we support are key_share and
+	// The only HelloRetryRequest Extensions we support are key_share and
 	// cookie, and clients must abort the handshake if the HRR would not result
 	// in any change in the ClientHello.
 	if hs.serverHello.selectedGroup == 0 && hs.serverHello.cookie == nil {
@@ -326,11 +326,11 @@ func (hs *clientHandshakeStateTLS13) processHelloRetryRequest() error {
 	// a group we advertised but did not send a key share for, and send a key
 	// share for it this time.
 	if curveID := hs.serverHello.selectedGroup; curveID != 0 {
-		if !slices.Contains(hello.supportedCurves, curveID) {
+		if !slices.Contains(hello.SupportedCurves, curveID) {
 			c.sendAlert(alertIllegalParameter)
 			return errors.New("tls: server selected unsupported group")
 		}
-		if slices.ContainsFunc(hs.hello.keyShares, func(ks keyShare) bool {
+		if slices.ContainsFunc(hs.hello.KeyShares, func(ks keyShare) bool {
 			return ks.group == curveID
 		}) {
 			c.sendAlert(alertIllegalParameter)
@@ -351,10 +351,10 @@ func (hs *clientHandshakeStateTLS13) processHelloRetryRequest() error {
 			return err
 		}
 		hs.keyShareKeys = &keySharePrivateKeys{curveID: curveID, ecdhe: key}
-		hello.keyShares = []keyShare{{group: curveID, data: key.PublicKey().Bytes()}}
+		hello.KeyShares = []keyShare{{group: curveID, data: key.PublicKey().Bytes()}}
 	}
 
-	if len(hello.pskIdentities) > 0 {
+	if len(hello.PskIdentities) > 0 {
 		pskSuite := cipherSuiteTLS13ByID(hs.session.cipherSuite)
 		if pskSuite == nil {
 			return c.sendAlert(alertInternalError)
@@ -362,7 +362,7 @@ func (hs *clientHandshakeStateTLS13) processHelloRetryRequest() error {
 		if pskSuite.hash == hs.suite.hash {
 			// Update binders and obfuscated_ticket_age.
 			ticketAge := c.config.time().Sub(time.Unix(int64(hs.session.createdAt), 0))
-			hello.pskIdentities[0].obfuscatedTicketAge = uint32(ticketAge/time.Millisecond) + hs.session.ageAdd
+			hello.PskIdentities[0].obfuscatedTicketAge = uint32(ticketAge/time.Millisecond) + hs.session.ageAdd
 
 			transcript := hs.suite.hash.New()
 			transcript.Write([]byte{typeMessageHash, 0, 0, uint8(len(chHash))})
@@ -376,7 +376,7 @@ func (hs *clientHandshakeStateTLS13) processHelloRetryRequest() error {
 			}
 		} else {
 			// Server selected a cipher suite incompatible with the PSK.
-			hello.pskIdentities = nil
+			hello.PskIdentities = nil
 			hello.pskBinders = nil
 		}
 	}
@@ -389,7 +389,7 @@ func (hs *clientHandshakeStateTLS13) processHelloRetryRequest() error {
 	// and utlsExtensionPadding are supposed to change
 	if hs.uconn != nil {
 		if hs.uconn.ClientHelloID != HelloGolang {
-			if len(hs.hello.pskIdentities) > 0 {
+			if len(hs.hello.PskIdentities) > 0 {
 				// TODO: wait for someone who cares about PSK to implement
 				return errors.New("uTLS does not support reprocessing of PSK key triggered by HelloRetryRequest")
 			}
@@ -398,7 +398,7 @@ func (hs *clientHandshakeStateTLS13) processHelloRetryRequest() error {
 			for _, ext := range hs.uconn.Extensions {
 				// new ks seems to be generated either way
 				if ks, ok := ext.(*KeyShareExtension); ok {
-					ks.KeyShares = keyShares(hs.hello.keyShares).ToPublic()
+					ks.KeyShares = keyShares(hs.hello.KeyShares).ToPublic()
 					keyShareExtFound = true
 				}
 			}
@@ -418,7 +418,7 @@ func (hs *clientHandshakeStateTLS13) processHelloRetryRequest() error {
 				}
 
 				if !cookieFound {
-					// pick a random index where to add cookieExtension
+					// pick a Random index where to add cookieExtension
 					// -2 instead of -1 is a lazy way to ensure that PSK is still a last extension
 					p, err := newPRNG()
 					if err != nil {
@@ -438,28 +438,28 @@ func (hs *clientHandshakeStateTLS13) processHelloRetryRequest() error {
 			if err := hs.uconn.MarshalClientHelloNoECH(); err != nil {
 				return err
 			}
-			hs.hello.original = hs.uconn.HandshakeState.Hello.Raw
+			hs.hello.Original = hs.uconn.HandshakeState.Hello.Raw
 		}
 	}
 	// [uTLS SECTION ENDS]
-	if hello.earlyData {
-		hello.earlyData = false
+	if hello.EarlyData {
+		hello.EarlyData = false
 		c.quicRejectedEarlyData()
 	}
 
 	if isInnerHello {
-		// Any extensions which have changed in hello, but are mirrored in the
+		// Any Extensions which have changed in hello, but are mirrored in the
 		// outer hello and compressed, need to be copied to the outer hello, so
 		// they can be properly decompressed by the server. For now, the only
-		// extension which may have changed is keyShares.
-		hs.hello.keyShares = hello.keyShares
+		// extension which may have changed is KeyShares.
+		hs.hello.KeyShares = hello.KeyShares
 		hs.echContext.innerHello = hello
 		if hs.uconn != nil && hs.uconn.clientHelloBuildStatus == BuildByUtls {
 			if err := hs.uconn.computeAndUpdateOuterECHExtension(hs.echContext.innerHello, hs.echContext, false); err != nil {
 				return err
 			}
 
-			hs.hello.original = hs.uconn.HandshakeState.Hello.Raw
+			hs.hello.Original = hs.uconn.HandshakeState.Hello.Raw
 
 			if err := hs.uconn.echTranscriptMsg(hs.hello, hs.echContext); err != nil {
 				return err
@@ -525,7 +525,7 @@ func (hs *clientHandshakeStateTLS13) processServerHello() error {
 		c.sendAlert(alertIllegalParameter)
 		return errors.New("tls: server did not send a key share")
 	}
-	if !slices.ContainsFunc(hs.hello.keyShares, func(ks keyShare) bool {
+	if !slices.ContainsFunc(hs.hello.KeyShares, func(ks keyShare) bool {
 		return ks.group == hs.serverHello.serverShare.group
 	}) {
 		c.sendAlert(alertIllegalParameter)
@@ -536,12 +536,12 @@ func (hs *clientHandshakeStateTLS13) processServerHello() error {
 		return nil
 	}
 
-	if int(hs.serverHello.selectedIdentity) >= len(hs.hello.pskIdentities) {
+	if int(hs.serverHello.selectedIdentity) >= len(hs.hello.PskIdentities) {
 		c.sendAlert(alertIllegalParameter)
 		return errors.New("tls: server selected an invalid PSK")
 	}
 
-	if len(hs.hello.pskIdentities) != 1 || hs.session == nil {
+	if len(hs.hello.PskIdentities) != 1 || hs.session == nil {
 		return c.sendAlert(alertInternalError)
 	}
 	pskSuite := cipherSuiteTLS13ByID(hs.session.cipherSuite)
@@ -666,12 +666,12 @@ func (hs *clientHandshakeStateTLS13) establishHandshakeKeys() error {
 		c.quicSetReadSecret(QUICEncryptionLevelHandshake, hs.suite.id, serverSecret)
 	}
 
-	err = c.config.writeKeyLog(keyLogLabelClientHandshake, hs.hello.random, clientSecret)
+	err = c.config.writeKeyLog(keyLogLabelClientHandshake, hs.hello.Random, clientSecret)
 	if err != nil {
 		c.sendAlert(alertInternalError)
 		return err
 	}
-	err = c.config.writeKeyLog(keyLogLabelServerHandshake, hs.hello.random, serverSecret)
+	err = c.config.writeKeyLog(keyLogLabelServerHandshake, hs.hello.Random, serverSecret)
 	if err != nil {
 		c.sendAlert(alertInternalError)
 		return err
@@ -696,7 +696,7 @@ func (hs *clientHandshakeStateTLS13) readServerParameters() error {
 		return unexpectedMessageError(encryptedExtensions, msg)
 	}
 
-	if err := checkALPN(hs.hello.alpnProtocols, encryptedExtensions.alpnProtocol, c.quic != nil); err != nil {
+	if err := checkALPN(hs.hello.AlpnProtocols, encryptedExtensions.alpnProtocol, c.quic != nil); err != nil {
 		// RFC 8446 specifies that no_application_protocol is sent by servers, but
 		// does not specify how clients handle the selection of an incompatible protocol.
 		// RFC 9001 Section 8.1 specifies that QUIC clients send no_application_protocol
@@ -730,11 +730,11 @@ func (hs *clientHandshakeStateTLS13) readServerParameters() error {
 		}
 	}
 
-	if !hs.hello.earlyData && encryptedExtensions.earlyData {
+	if !hs.hello.EarlyData && encryptedExtensions.earlyData {
 		c.sendAlert(alertUnsupportedExtension)
 		return errors.New("tls: server sent an unexpected early_data extension")
 	}
-	if hs.hello.earlyData && !encryptedExtensions.earlyData {
+	if hs.hello.EarlyData && !encryptedExtensions.earlyData {
 		c.quicRejectedEarlyData()
 	}
 	if encryptedExtensions.earlyData {
@@ -909,12 +909,12 @@ func (hs *clientHandshakeStateTLS13) readServerFinished() error {
 	serverSecret := hs.masterSecret.ServerApplicationTrafficSecret(hs.transcript)
 	c.in.setTrafficSecret(hs.suite, QUICEncryptionLevelApplication, serverSecret)
 
-	err = c.config.writeKeyLog(keyLogLabelClientTraffic, hs.hello.random, hs.trafficSecret)
+	err = c.config.writeKeyLog(keyLogLabelClientTraffic, hs.hello.Random, hs.trafficSecret)
 	if err != nil {
 		c.sendAlert(alertInternalError)
 		return err
 	}
-	err = c.config.writeKeyLog(keyLogLabelServerTraffic, hs.hello.random, serverSecret)
+	err = c.config.writeKeyLog(keyLogLabelServerTraffic, hs.hello.Random, serverSecret)
 	if err != nil {
 		c.sendAlert(alertInternalError)
 		return err

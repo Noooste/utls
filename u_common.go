@@ -42,7 +42,7 @@ const (
 	utlsExtensionECH                    uint16 = 0xfe0d // draft-ietf-tls-esni-17
 	utlsExtensionECHOuterExtensions     uint16 = 0xfd00 // draft-ietf-tls-esni-17
 
-	// extensions with 'fake' prefix break connection, if server echoes them back
+	// Extensions with 'fake' prefix break connection, if server echoes them back
 	fakeExtensionEncryptThenMAC       uint16 = 22
 	fakeExtensionTokenBinding         uint16 = 24
 	fakeExtensionDelegatedCredentials uint16 = 34
@@ -184,13 +184,13 @@ const (
 type ClientHelloSpec struct {
 	CipherSuites       []uint16       // nil => default
 	CompressionMethods []uint8        // nil => no compression
-	Extensions         []TLSExtension // nil => no extensions
+	Extensions         []TLSExtension // nil => no Extensions
 
 	TLSVersMin uint16 // [1.0-1.3] default: parse from .Extensions, if SupportedVersions ext is not present => 1.0
 	TLSVersMax uint16 // [1.2-1.3] default: parse from .Extensions, if SupportedVersions ext is not present => 1.2
 
-	// GreaseStyle: currently only random
-	// sessionID may or may not depend on ticket; nil => random
+	// GreaseStyle: currently only Random
+	// sessionID may or may not depend on ticket; nil => Random
 	GetSessionID func(ticket []byte) [32]byte
 
 	// TLSFingerprintLink string // ?? link to tlsfingerprint.io for informational purposes
@@ -221,7 +221,7 @@ func (chs *ClientHelloSpec) ReadCompressionMethods(compressionMethods []byte) er
 	return nil
 }
 
-// ReadTLSExtensions is a helper function to construct a list of TLS extensions from
+// ReadTLSExtensions is a helper function to construct a list of TLS Extensions from
 // a byte slice into []TLSExtension.
 func (chs *ClientHelloSpec) ReadTLSExtensions(b []byte, allowBluntMimicry bool, realPSK bool) error {
 	extensions := cryptobyte.String(b)
@@ -291,7 +291,7 @@ func (chs *ClientHelloSpec) AlwaysAddPadding() {
 // data is a map of []byte with following keys:
 // - cipher_suites: [10, 10, 19, 1, 19, 2, 19, 3, 192, 43, 192, 47, 192, 44, 192, 48, 204, 169, 204, 168, 192, 19, 192, 20, 0, 156, 0, 157, 0, 47, 0, 53]
 // - compression_methods: [0] => null
-// - extensions: [10, 10, 255, 1, 0, 45, 0, 35, 0, 16, 68, 105, 0, 11, 0, 43, 0, 18, 0, 13, 0, 0, 0, 10, 0, 27, 0, 5, 0, 51, 0, 23, 10, 10, 0, 21]
+// - Extensions: [10, 10, 255, 1, 0, 45, 0, 35, 0, 16, 68, 105, 0, 11, 0, 43, 0, 18, 0, 13, 0, 0, 0, 10, 0, 27, 0, 5, 0, 51, 0, 23, 10, 10, 0, 21]
 // - pt_fmts (ec_point_formats): [1, 0] => len: 1, content: 0x00
 // - sig_algs （signature_algorithms): [0, 16, 4, 3, 8, 4, 4, 1, 5, 3, 8, 5, 5, 1, 8, 6, 6, 1] => len: 16, content: 0x0403, 0x0804, 0x0401, 0x0503, 0x0805, 0x0501, 0x0806, 0x0601
 // - supported_versions: [10, 10, 3, 4, 3, 3] => 0x0a0a, 0x0304, 0x0303 (GREASE, TLS 1.3, TLS 1.2)
@@ -321,10 +321,10 @@ func (chs *ClientHelloSpec) ImportTLSClientHello(data map[string][]byte) error {
 	}
 	chs.CompressionMethods = data["compression_methods"]
 
-	if data["extensions"] == nil {
-		return errors.New("extensions is required")
+	if data["Extensions"] == nil {
+		return errors.New("Extensions is required")
 	}
-	tlsExtensionTypes, err = helper.Uint8to16(data["extensions"])
+	tlsExtensionTypes, err = helper.Uint8to16(data["Extensions"])
 	if err != nil {
 		return err
 	}
@@ -512,8 +512,8 @@ func (chs *ClientHelloSpec) FromRaw(raw []byte, ctrlFlags ...bool) error {
 	var handshakeType uint8
 
 	if !s.ReadUint8(&handshakeType) || !s.Skip(3) || // message type and 3 byte length
-		!s.ReadUint16(&handshakeVersion) || !s.Skip(32) { // 32 byte random
-		return errors.New("unable to read handshake message type, length, and random")
+		!s.ReadUint16(&handshakeVersion) || !s.Skip(32) { // 32 byte Random
+		return errors.New("unable to read handshake message type, length, and Random")
 	}
 
 	if handshakeType != typeClientHello {
@@ -555,7 +555,7 @@ func (chs *ClientHelloSpec) FromRaw(raw []byte, ctrlFlags ...bool) error {
 
 	var extensions cryptobyte.String
 	if !s.ReadUint16LengthPrefixed(&extensions) {
-		return errors.New("unable to read extensions data")
+		return errors.New("unable to read Extensions data")
 	}
 
 	if err := chs.ReadTLSExtensions(extensions, bluntMimicry, realPSK); err != nil {
@@ -596,7 +596,7 @@ var (
 	// TLSExtensions manually or use ApplyPreset function
 	HelloCustom = ClientHelloID{helloCustom, helloAutoVers, nil, nil}
 
-	// HelloRandomized* randomly adds/reorders extensions, ciphersuites, etc.
+	// HelloRandomized* randomly adds/reorders Extensions, ciphersuites, etc.
 	HelloRandomized       = ClientHelloID{helloRandomized, helloAutoVers, nil, nil}
 	HelloRandomizedALPN   = ClientHelloID{helloRandomizedALPN, helloAutoVers, nil, nil}
 	HelloRandomizedNoALPN = ClientHelloID{helloRandomizedNoALPN, helloAutoVers, nil, nil}

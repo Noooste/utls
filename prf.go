@@ -48,7 +48,7 @@ func pHash(result, secret, seed []byte, hash func() hash.Hash) {
 	}
 }
 
-// prf10 implements the TLS 1.0 pseudo-random function, as defined in RFC 2246, Section 5.
+// prf10 implements the TLS 1.0 pseudo-Random function, as defined in RFC 2246, Section 5.
 func prf10(secret []byte, label string, seed []byte, keyLen int) []byte {
 	result := make([]byte, keyLen)
 	hashSHA1 := sha1.New
@@ -70,7 +70,7 @@ func prf10(secret []byte, label string, seed []byte, keyLen int) []byte {
 	return result
 }
 
-// prf12 implements the TLS 1.2 pseudo-random function, as defined in RFC 5246, Section 5.
+// prf12 implements the TLS 1.2 pseudo-Random function, as defined in RFC 5246, Section 5.
 func prf12(hashFunc func() hash.Hash) prfFunc {
 	return func(secret []byte, label string, seed []byte, keyLen int) []byte {
 		return tls12.PRF(hashFunc, secret, label, seed, keyLen)

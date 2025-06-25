@@ -6,13 +6,13 @@ package tls
 
 // Fingerprinter is a struct largely for holding options for the FingerprintClientHello func
 type Fingerprinter struct {
-	// AllowBluntMimicry will ensure that unknown extensions are
+	// AllowBluntMimicry will ensure that unknown Extensions are
 	// passed along into the resulting ClientHelloSpec as-is
 	// WARNING: there could be numerous subtle issues with ClientHelloSpecs
 	// that are generated with this flag which could compromise security and/or mimicry
 	AllowBluntMimicry bool
 	// AlwaysAddPadding will always add a UtlsPaddingExtension with BoringPaddingStyle
-	// at the end of the extensions list if it isn't found in the fingerprinted hello.
+	// at the end of the Extensions list if it isn't found in the fingerprinted hello.
 	// This could be useful in scenarios where the hello you are fingerprinting does not
 	// have any padding, but you suspect that other changes you make to the final hello
 	// (including things like different SNI lengths) would cause padding to be necessary
@@ -24,7 +24,7 @@ type Fingerprinter struct {
 // FingerprintClientHello returns a ClientHelloSpec which is based on the
 // ClientHello that is passed in as the data argument
 //
-// If the ClientHello passed in has extensions that are not recognized or cannot be handled
+// If the ClientHello passed in has Extensions that are not recognized or cannot be handled
 // it will return a non-nil error and a nil *ClientHelloSpec value
 //
 // The data should be the full tls record, including the record type/version/length header

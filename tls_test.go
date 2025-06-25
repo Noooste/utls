@@ -1535,7 +1535,7 @@ func TestCipherSuites(t *testing.T) {
 	}
 
 	if len(cipherSuitesPreferenceOrder) != len(cipherSuites) {
-		t.Errorf("cipherSuitesPreferenceOrder is not the same size as cipherSuites")
+		t.Errorf("cipherSuitesPreferenceOrder is not the same size as CipherSuites")
 	}
 	if len(cipherSuitesPreferenceOrderNoAES) != len(cipherSuitesPreferenceOrder) {
 		t.Errorf("cipherSuitesPreferenceOrderNoAES is not the same size as cipherSuitesPreferenceOrder")
@@ -2119,7 +2119,7 @@ func testECHSpec(t *testing.T, spec *ClientHelloSpec, expectSuccess bool) {
 			builder.AddUint8LengthPrefixed(func(builder *cryptobyte.Builder) {
 				builder.AddBytes([]byte(publicName))
 			})
-			builder.AddUint16(0) // extensions
+			builder.AddUint16(0) // Extensions
 		})
 
 		return builder.BytesOrPanic()

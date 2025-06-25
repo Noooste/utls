@@ -77,25 +77,25 @@ func TestMarshalUnmarshal(t *testing.T) {
 				}
 
 				if ch, ok := m.(*clientHelloMsg); ok {
-					// extensions is special cased, as it is only populated by the
+					// Extensions is special cased, as it is only populated by the
 					// server-side of a handshake and is not expected to roundtrip
 					// through marshal + unmarshal.  m ends up with the list of
-					// extensions necessary to serialize the other fields of
+					// Extensions necessary to serialize the other fields of
 					// clientHelloMsg, so check that it is non-empty, then clear it.
-					if len(ch.extensions) == 0 {
-						t.Errorf("expected ch.extensions to be populated on unmarshal")
+					if len(ch.Extensions) == 0 {
+						t.Errorf("expected ch.Extensions to be populated on unmarshal")
 					}
-					ch.extensions = nil
+					ch.Extensions = nil
 				}
 
 				// clientHelloMsg and serverHelloMsg, when unmarshalled, store
-				// their original representation, for later use in the handshake
+				// their Original representation, for later use in the handshake
 				// transcript. In order to prevent DeepEqual from failing since
-				// we didn't create the original message via unmarshalling, nil
+				// we didn't create the Original message via unmarshalling, nil
 				// the field.
 				switch t := m.(type) {
 				case *clientHelloMsg:
-					t.original = nil
+					t.Original = nil
 				case *serverHelloMsg:
 					t.original = nil
 				}
@@ -150,59 +150,59 @@ func randomString(n int, rand *rand.Rand) string {
 
 func (*clientHelloMsg) Generate(rand *rand.Rand, size int) reflect.Value {
 	m := &clientHelloMsg{}
-	m.vers = uint16(rand.Intn(65536))
-	m.random = randomBytes(32, rand)
+	m.Vers = uint16(rand.Intn(65536))
+	m.Random = randomBytes(32, rand)
 	m.sessionId = randomBytes(rand.Intn(32), rand)
-	m.cipherSuites = make([]uint16, rand.Intn(63)+1)
-	for i := 0; i < len(m.cipherSuites); i++ {
+	m.CipherSuites = make([]uint16, rand.Intn(63)+1)
+	for i := 0; i < len(m.CipherSuites); i++ {
 		cs := uint16(rand.Int31())
 		if cs == scsvRenegotiation {
 			cs += 1
 		}
-		m.cipherSuites[i] = cs
+		m.CipherSuites[i] = cs
 	}
-	m.compressionMethods = randomBytes(rand.Intn(63)+1, rand)
+	m.CompressionMethods = randomBytes(rand.Intn(63)+1, rand)
 	if rand.Intn(10) > 5 {
-		m.serverName = randomString(rand.Intn(255), rand)
-		for strings.HasSuffix(m.serverName, ".") {
-			m.serverName = m.serverName[:len(m.serverName)-1]
+		m.ServerName = randomString(rand.Intn(255), rand)
+		for strings.HasSuffix(m.ServerName, ".") {
+			m.ServerName = m.ServerName[:len(m.ServerName)-1]
 		}
 	}
-	m.ocspStapling = rand.Intn(10) > 5
-	m.supportedPoints = randomBytes(rand.Intn(5)+1, rand)
-	m.supportedCurves = make([]CurveID, rand.Intn(5)+1)
-	for i := range m.supportedCurves {
-		m.supportedCurves[i] = CurveID(rand.Intn(30000) + 1)
+	m.OcspStapling = rand.Intn(10) > 5
+	m.SupportedPoints = randomBytes(rand.Intn(5)+1, rand)
+	m.SupportedCurves = make([]CurveID, rand.Intn(5)+1)
+	for i := range m.SupportedCurves {
+		m.SupportedCurves[i] = CurveID(rand.Intn(30000) + 1)
 	}
 	if rand.Intn(10) > 5 {
-		m.ticketSupported = true
+		m.TicketSupported = true
 		if rand.Intn(10) > 5 {
-			m.sessionTicket = randomBytes(rand.Intn(300), rand)
+			m.SessionTicket = randomBytes(rand.Intn(300), rand)
 		} else {
-			m.sessionTicket = make([]byte, 0)
+			m.SessionTicket = make([]byte, 0)
 		}
 	}
 	if rand.Intn(10) > 5 {
-		m.supportedSignatureAlgorithms = supportedSignatureAlgorithms()
+		m.SupportedSignatureAlgorithms = supportedSignatureAlgorithms()
 	}
 	if rand.Intn(10) > 5 {
-		m.supportedSignatureAlgorithmsCert = supportedSignatureAlgorithms()
+		m.SupportedSignatureAlgorithmsCert = supportedSignatureAlgorithms()
 	}
 	for i := 0; i < rand.Intn(5); i++ {
-		m.alpnProtocols = append(m.alpnProtocols, randomString(rand.Intn(20)+1, rand))
+		m.AlpnProtocols = append(m.AlpnProtocols, randomString(rand.Intn(20)+1, rand))
 	}
 	if rand.Intn(10) > 5 {
 		m.scts = true
 	}
 	if rand.Intn(10) > 5 {
-		m.secureRenegotiationSupported = true
-		m.secureRenegotiation = randomBytes(rand.Intn(50)+1, rand)
+		m.SecureRenegotiationSupported = true
+		m.SecureRenegotiation = randomBytes(rand.Intn(50)+1, rand)
 	}
 	if rand.Intn(10) > 5 {
-		m.extendedMasterSecret = true
+		m.ExtendedMasterSecret = true
 	}
 	for i := 0; i < rand.Intn(5); i++ {
-		m.supportedVersions = append(m.supportedVersions, uint16(rand.Intn(0xffff)+1))
+		m.SupportedVersions = append(m.SupportedVersions, uint16(rand.Intn(0xffff)+1))
 	}
 	if rand.Intn(10) > 5 {
 		m.cookie = randomBytes(rand.Intn(500)+1, rand)
@@ -211,7 +211,7 @@ func (*clientHelloMsg) Generate(rand *rand.Rand, size int) reflect.Value {
 		var ks keyShare
 		ks.group = CurveID(rand.Intn(30000) + 1)
 		ks.data = randomBytes(rand.Intn(200)+1, rand)
-		m.keyShares = append(m.keyShares, ks)
+		m.KeyShares = append(m.KeyShares, ks)
 	}
 	switch rand.Intn(3) {
 	case 1:
@@ -223,17 +223,17 @@ func (*clientHelloMsg) Generate(rand *rand.Rand, size int) reflect.Value {
 		var psk pskIdentity
 		psk.obfuscatedTicketAge = uint32(rand.Intn(500000))
 		psk.label = randomBytes(rand.Intn(500)+1, rand)
-		m.pskIdentities = append(m.pskIdentities, psk)
+		m.PskIdentities = append(m.PskIdentities, psk)
 		m.pskBinders = append(m.pskBinders, randomBytes(rand.Intn(50)+32, rand))
 	}
 	if rand.Intn(10) > 5 {
-		m.quicTransportParameters = randomBytes(rand.Intn(500), rand)
+		m.QuicTransportParameters = randomBytes(rand.Intn(500), rand)
 	}
 	if rand.Intn(10) > 5 {
-		m.earlyData = true
+		m.EarlyData = true
 	}
 	if rand.Intn(10) > 5 {
-		m.encryptedClientHello = randomBytes(rand.Intn(50)+1, rand)
+		m.EncryptedClientHello = randomBytes(rand.Intn(50)+1, rand)
 	}
 
 	return reflect.ValueOf(m)
@@ -552,7 +552,7 @@ func TestRejectEmptySCTList(t *testing.T) {
 	serverHelloEmptySCT[2] = byte((len(serverHelloEmptySCT) - 4) >> 8)
 	serverHelloEmptySCT[3] = byte(len(serverHelloEmptySCT) - 4)
 
-	// Update the extensions length
+	// Update the Extensions length
 	serverHelloEmptySCT[42] = byte((len(serverHelloEmptySCT) - 44) >> 8)
 	serverHelloEmptySCT[43] = byte((len(serverHelloEmptySCT) - 44))
 
@@ -586,7 +586,7 @@ func TestRejectDuplicateExtensions(t *testing.T) {
 	}
 	var clientHelloCopy clientHelloMsg
 	if clientHelloCopy.unmarshal(clientHelloBytes) {
-		t.Error("Unmarshaled ClientHello with duplicate extensions")
+		t.Error("Unmarshaled ClientHello with duplicate Extensions")
 	}
 
 	serverHelloBytes, err := hex.DecodeString("02000030030300000000000000000000000000000000000000000000000000000000000000000000000000080005000000050000")
@@ -595,6 +595,6 @@ func TestRejectDuplicateExtensions(t *testing.T) {
 	}
 	var serverHelloCopy serverHelloMsg
 	if serverHelloCopy.unmarshal(serverHelloBytes) {
-		t.Fatal("Unmarshaled ServerHello with duplicate extensions")
+		t.Fatal("Unmarshaled ServerHello with duplicate Extensions")
 	}
 }

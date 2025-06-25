@@ -63,8 +63,8 @@ type TransportParameter interface {
 
 type GREASETransportParameter struct {
 	IdOverride    uint64 // if set to a valid GREASE ID, use this instead of randomly generated one.
-	Length        uint16 // if len(ValueOverride) == 0, will generate random data of this size.
-	ValueOverride []byte // if len(ValueOverride) > 0, use this instead of random bytes.
+	Length        uint16 // if len(ValueOverride) == 0, will generate Random data of this size.
+	ValueOverride []byte // if len(ValueOverride) > 0, use this instead of Random bytes.
 }
 
 const (
@@ -77,7 +77,7 @@ func (GREASETransportParameter) IsGREASEID(id uint64) bool {
 	return id >= 27 && (id-27)%31 == 0
 }
 
-// GetGREASEID returns a random valid GREASE ID for transport parameters.
+// GetGREASEID returns a Random valid GREASE ID for transport parameters.
 func (GREASETransportParameter) GetGREASEID() uint64 {
 	max := big.NewInt(GREASE_MAX_MULTIPLIER)
 
@@ -261,7 +261,7 @@ func (v *VersionInformation) Value() []byte {
 }
 
 func (*VersionInformation) GetGREASEVersion() uint32 {
-	// get a random uint32
+	// get a Random uint32
 	max := big.NewInt(math.MaxUint32)
 	randVal, err := rand.Int(rand.Reader, max)
 	if err != nil {

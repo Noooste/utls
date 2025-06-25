@@ -158,7 +158,7 @@ func TestLegacyTypeAndHash(t *testing.T) {
 	}
 }
 
-// TestSupportedSignatureAlgorithms checks that all supportedSignatureAlgorithms
+// TestSupportedSignatureAlgorithms checks that all SupportedSignatureAlgorithms
 // have valid type and hash information.
 func TestSupportedSignatureAlgorithms(t *testing.T) {
 	for _, sigAlg := range supportedSignatureAlgorithms() {

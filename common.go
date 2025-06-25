@@ -225,7 +225,7 @@ var helloRetryRequestRandom = []byte{ // See RFC 8446, Section 4.1.3.
 
 const (
 	// downgradeCanaryTLS12 or downgradeCanaryTLS11 is embedded in the server
-	// random as a downgrade protection if the server would be capable of
+	// Random as a downgrade protection if the server would be capable of
 	// negotiating a higher version. See RFC 8446, Section 4.1.3.
 	downgradeCanaryTLS12 = "DOWNGRD\x01"
 	downgradeCanaryTLS11 = "DOWNGRD\x00"
@@ -468,7 +468,7 @@ type ClientHelloInfo struct {
 	// might be rejected if used.
 	SupportedVersions []uint16
 
-	// Extensions lists the IDs of the extensions presented by the client
+	// Extensions lists the IDs of the Extensions presented by the client
 	// in the ClientHello.
 	Extensions []uint16
 
@@ -555,7 +555,7 @@ const (
 // modify it.
 type Config struct {
 	// Rand provides the source of entropy for nonces and RSA blinding.
-	// If Rand is nil, TLS uses the cryptographic random reader in package
+	// If Rand is nil, TLS uses the cryptographic Random reader in package
 	// crypto/rand.
 	// The Reader must be safe for use by multiple goroutines.
 	Rand io.Reader
@@ -617,7 +617,7 @@ type Config struct {
 	// GetConfigForClient, if not nil, is called after a ClientHello is
 	// received from a client. It may return a non-nil Config in order to
 	// change the Config that will be used to handle this connection. If
-	// the returned Config is nil, the original Config will be used. The
+	// the returned Config is nil, the Original Config will be used. The
 	// Config returned by this callback may not be subsequently modified.
 	//
 	// If GetConfigForClient is nil, the Config passed to Server() will be
@@ -625,7 +625,7 @@ type Config struct {
 	//
 	// If SessionTicketKey was explicitly set on the returned Config, or if
 	// SetSessionTicketKeys was called on the returned Config, those keys will
-	// be used. Otherwise, the original Config keys will be used (and possibly
+	// be used. Otherwise, the Original Config keys will be used (and possibly
 	// rotated if they are automatically managed).
 	GetConfigForClient func(*ClientHelloInfo) (*Config, error)
 
@@ -724,7 +724,7 @@ type Config struct {
 	// This field is ignored when InsecureSkipVerify is true.
 	InsecureServerNameToVerify string // [uTLS]
 
-	// PreferSkipResumptionOnNilExtension controls the behavior when session resumption is enabled but the corresponding session extensions are nil.
+	// PreferSkipResumptionOnNilExtension controls the behavior when session resumption is enabled but the corresponding session Extensions are nil.
 	//
 	// To successfully use session resumption, ensure that the following requirements are met:
 	//  - SessionTicketsDisabled is set to false
@@ -765,7 +765,7 @@ type Config struct {
 
 	// SessionTicketKey is used by TLS servers to provide session resumption.
 	// See RFC 5077 and the PSK mode of RFC 8446. If zero, it will be filled
-	// with random data before the first server handshake.
+	// with Random data before the first server handshake.
 	//
 	// Deprecated: if this field is left at zero, session ticket keys will be
 	// automatically rotated every day and dropped after seven days. For
@@ -969,7 +969,7 @@ type ticketKey struct {
 }
 
 // ticketKeyFromBytes converts from the external representation of a session
-// ticket key to a ticketKey. Externally, session ticket keys are 32 random
+// ticket key to a ticketKey. Externally, session ticket keys are 32 Random
 // bytes and this function expands that into sufficient name and key material.
 func (c *Config) ticketKeyFromBytes(b [32]byte) (key ticketKey) {
 	hashed := sha512.Sum512(b[:])
@@ -1061,7 +1061,7 @@ func (c *Config) initLegacySessionTicketKeyRLocked() {
 	defer c.mutex.Unlock()
 	if c.SessionTicketKey == [32]byte{} {
 		if _, err := io.ReadFull(c.rand(), c.SessionTicketKey[:]); err != nil {
-			panic(fmt.Sprintf("tls: unable to generate random session ticket key: %v", err))
+			panic(fmt.Sprintf("tls: unable to generate Random session ticket key: %v", err))
 		}
 		// Write the deprecated prefix at the beginning so we know we created
 		// it. This key with the DEPRECATED prefix isn't used as an actual
@@ -1085,7 +1085,7 @@ func (c *Config) initLegacySessionTicketKeyRLocked() {
 // created and prepended to c.sessionTicketKeys.
 func (c *Config) ticketKeys(configForClient *Config) []ticketKey {
 	// If the ConfigForClient callback returned a Config with explicitly set
-	// keys, use those, otherwise just use the original Config.
+	// keys, use those, otherwise just use the Original Config.
 	if configForClient != nil {
 		configForClient.mutex.RLock()
 		if configForClient.SessionTicketsDisabled {
@@ -1123,7 +1123,7 @@ func (c *Config) ticketKeys(configForClient *Config) []ticketKey {
 	if len(c.autoSessionTicketKeys) == 0 || c.time().Sub(c.autoSessionTicketKeys[0].created) >= ticketKeyRotation {
 		var newKey [32]byte
 		if _, err := io.ReadFull(c.rand(), newKey[:]); err != nil {
-			panic(fmt.Sprintf("unable to generate random session ticket key: %v", err))
+			panic(fmt.Sprintf("unable to generate Random session ticket key: %v", err))
 		}
 		valid := make([]ticketKey, 0, len(c.autoSessionTicketKeys)+1)
 		valid = append(valid, c.ticketKeyFromBytes(newKey))
@@ -1193,8 +1193,8 @@ func (c *Config) cipherSuites() []uint16 {
 	}
 	// [uTLS] SECTION BEGIN
 	// if fips140tls.Required() {
-	// 	cipherSuites := slices.Clone(c.CipherSuites)
-	// 	return slices.DeleteFunc(cipherSuites, func(id uint16) bool {
+	// 	CipherSuites := slices.Clone(c.CipherSuites)
+	// 	return slices.DeleteFunc(CipherSuites, func(id uint16) bool {
 	// 		return !slices.Contains(defaultCipherSuitesFIPS, id)
 	// 	})
 	// }
@@ -1655,7 +1655,7 @@ type handshakeMessage interface {
 type handshakeMessageWithOriginalBytes interface {
 	handshakeMessage
 
-	// originalBytes should return the original bytes that were passed to
+	// originalBytes should return the Original bytes that were passed to
 	// unmarshal to create the message. If the message was not produced by
 	// unmarshal, it should return nil.
 	originalBytes() []byte

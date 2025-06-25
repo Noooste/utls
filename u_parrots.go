@@ -2694,13 +2694,13 @@ func utlsIdToSpec(id ClientHelloID) (ClientHelloSpec, error) {
 	}
 }
 
-// ShuffleChromeTLSExtensions shuffles the extensions in the ClientHelloSpec to avoid ossification.
-// It shuffles every extension except GREASE, padding and pre_shared_key extensions.
+// ShuffleChromeTLSExtensions shuffles the Extensions in the ClientHelloSpec to avoid ossification.
+// It shuffles every extension except GREASE, padding and pre_shared_key Extensions.
 //
 // This feature was first introduced by Chrome 106.
 func ShuffleChromeTLSExtensions(exts []TLSExtension) []TLSExtension {
 	// unshufCheck checks if the exts[idx] is a GREASE/padding/pre_shared_key extension,
-	// and returns true on success. For these extensions are considered positionally invariant.
+	// and returns true on success. For these Extensions are considered positionally invariant.
 	var skipShuf = func(idx int, exts []TLSExtension) bool {
 		switch exts[idx].(type) {
 		case *UtlsGREASEExtension, *UtlsPaddingExtension, PreSharedKeyExtension:
@@ -2710,21 +2710,21 @@ func ShuffleChromeTLSExtensions(exts []TLSExtension) []TLSExtension {
 		}
 	}
 
-	// Shuffle other extensions
+	// Shuffle other Extensions
 	randInt64, err := crand.Int(crand.Reader, big.NewInt(math.MaxInt64))
 	if err != nil {
-		// warning: random could be deterministic
+		// warning: Random could be deterministic
 		rand.Shuffle(len(exts), func(i, j int) {
 			if skipShuf(i, exts) || skipShuf(j, exts) {
-				return // do not shuffle some of the extensions
+				return // do not shuffle some of the Extensions
 			}
 			exts[i], exts[j] = exts[j], exts[i]
 		})
-		fmt.Println("Warning: failed to use a cryptographically secure random number generator. The shuffle can be deterministic.")
+		fmt.Println("Warning: failed to use a cryptographically secure Random number generator. The shuffle can be deterministic.")
 	} else {
 		rand.New(rand.NewSource(randInt64.Int64())).Shuffle(len(exts), func(i, j int) {
 			if skipShuf(i, exts) || skipShuf(j, exts) {
-				return // do not shuffle some of the extensions
+				return // do not shuffle some of the Extensions
 			}
 			exts[i], exts[j] = exts[j], exts[i]
 		})
@@ -2825,7 +2825,7 @@ func (uconn *UConn) ApplyPreset(p *ClientHelloSpec) error {
 		}
 	}
 
-	// A random session ID is used to detect when the server accepted a ticket
+	// A Random session ID is used to detect when the server accepted a ticket
 	// and is resuming a session (see RFC 5077). In TLS 1.3, it's always set as
 	// a compatibility measure (see RFC 8446, Section 4.1.2).
 	//
@@ -2863,7 +2863,7 @@ func (uconn *UConn) ApplyPreset(p *ClientHelloSpec) error {
 				ext.Value = GetBoringGREASEValue(uconn.greaseSeed, ssl_grease_extension2)
 				ext.Body = []byte{0}
 			default:
-				return errors.New("at most 2 grease extensions are supported")
+				return errors.New("at most 2 grease Extensions are supported")
 			}
 			grease_extensions_seen += 1
 		case *SupportedCurvesExtension:
@@ -3105,7 +3105,7 @@ func generateRandomizedSpec(
 		}}
 		if r.FlipWeightedCoin(id.Weights.FirstKeyShare_Set_CurveP256) {
 			// do not ADD second keyShare because crypto/tls does not support multiple ecdheParams
-			// TODO: add it back when they implement multiple keyShares, or implement it oursevles
+			// TODO: add it back when they implement multiple KeyShares, or implement it oursevles
 			// ks.KeyShares = append(ks.KeyShares, KeyShare{Group: CurveP256})
 			ks.KeyShares[0].Group = CurveP256
 		}
@@ -3156,7 +3156,7 @@ func removeRandomCiphers(r *prng, s []uint16, maxRemovalProbability float64) []u
 		return s
 	}
 
-	// remove random elements
+	// remove Random elements
 	floatLen := float64(len(s))
 	sliceLen := len(s)
 	for i := 1; i < sliceLen; i++ {

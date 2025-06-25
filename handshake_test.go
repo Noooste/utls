@@ -38,7 +38,7 @@ import (
 //
 // Tests can be updated by running them with the -update flag. This will cause
 // the test files for failing tests to be regenerated. Since the reference
-// implementation will always generate fresh random numbers, large parts of the
+// implementation will always generate fresh Random numbers, large parts of the
 // reference connection will always change.
 
 var (

@@ -213,29 +213,29 @@ func (c *Conn) makeClientHelloForApplyPreset() (*clientHelloMsg, *keySharePrivat
 	maxVersion := config.maxSupportedVersion(roleClient)
 
 	hello := &clientHelloMsg{
-		vers:                         maxVersion,
-		compressionMethods:           []uint8{compressionNone},
-		random:                       make([]byte, 32),
-		extendedMasterSecret:         true,
-		ocspStapling:                 true,
+		Vers:                         maxVersion,
+		CompressionMethods:           []uint8{compressionNone},
+		Random:                       make([]byte, 32),
+		ExtendedMasterSecret:         true,
+		OcspStapling:                 true,
 		scts:                         true,
-		serverName:                   hostnameInSNI(config.ServerName),
-		supportedCurves:              config.curvePreferences(maxVersion),
-		supportedPoints:              []uint8{pointFormatUncompressed},
-		secureRenegotiationSupported: true,
-		alpnProtocols:                config.NextProtos,
-		supportedVersions:            supportedVersions,
+		ServerName:                   hostnameInSNI(config.ServerName),
+		SupportedCurves:              config.curvePreferences(maxVersion),
+		SupportedPoints:              []uint8{pointFormatUncompressed},
+		SecureRenegotiationSupported: true,
+		AlpnProtocols:                config.NextProtos,
+		SupportedVersions:            supportedVersions,
 	}
 
 	// The version at the beginning of the ClientHello was capped at TLS 1.2
 	// for compatibility reasons. The supported_versions extension is used
 	// to negotiate versions now. See RFC 8446, Section 4.2.1.
-	if hello.vers > VersionTLS12 {
-		hello.vers = VersionTLS12
+	if hello.Vers > VersionTLS12 {
+		hello.Vers = VersionTLS12
 	}
 
 	if c.handshakes > 0 {
-		hello.secureRenegotiation = c.clientFinished[:]
+		hello.SecureRenegotiation = c.clientFinished[:]
 	}
 
 	preferenceOrder := cipherSuitesPreferenceOrder
@@ -243,7 +243,7 @@ func (c *Conn) makeClientHelloForApplyPreset() (*clientHelloMsg, *keySharePrivat
 		preferenceOrder = cipherSuitesPreferenceOrderNoAES
 	}
 	configCipherSuites := config.cipherSuites()
-	hello.cipherSuites = make([]uint16, 0, len(configCipherSuites))
+	hello.CipherSuites = make([]uint16, 0, len(configCipherSuites))
 
 	for _, suiteId := range preferenceOrder {
 		suite := mutualCipherSuite(configCipherSuites, suiteId)
@@ -255,15 +255,15 @@ func (c *Conn) makeClientHelloForApplyPreset() (*clientHelloMsg, *keySharePrivat
 		if maxVersion < VersionTLS12 && suite.flags&suiteTLS12 != 0 {
 			continue
 		}
-		hello.cipherSuites = append(hello.cipherSuites, suiteId)
+		hello.CipherSuites = append(hello.CipherSuites, suiteId)
 	}
 
-	_, err := io.ReadFull(config.rand(), hello.random)
+	_, err := io.ReadFull(config.rand(), hello.Random)
 	if err != nil {
 		return nil, nil, nil, errors.New("tls: short read from Rand: " + err.Error())
 	}
 
-	// A random session ID is used to detect when the server accepted a ticket
+	// A Random session ID is used to detect when the server accepted a ticket
 	// and is resuming a session (see RFC 5077). In TLS 1.3, it's always set as
 	// a compatibility measure (see RFC 8446, Section 4.1.2).
 	//
@@ -276,30 +276,30 @@ func (c *Conn) makeClientHelloForApplyPreset() (*clientHelloMsg, *keySharePrivat
 	}
 
 	if maxVersion >= VersionTLS12 {
-		hello.supportedSignatureAlgorithms = supportedSignatureAlgorithms()
+		hello.SupportedSignatureAlgorithms = supportedSignatureAlgorithms()
 	}
 	if testingOnlyForceClientHelloSignatureAlgorithms != nil {
-		hello.supportedSignatureAlgorithms = testingOnlyForceClientHelloSignatureAlgorithms
+		hello.SupportedSignatureAlgorithms = testingOnlyForceClientHelloSignatureAlgorithms
 	}
 
 	var keyShareKeys *keySharePrivateKeys
-	if hello.supportedVersions[0] == VersionTLS13 {
+	if hello.SupportedVersions[0] == VersionTLS13 {
 		// Reset the list of ciphers when the client only supports TLS 1.3.
-		if len(hello.supportedVersions) == 1 {
-			hello.cipherSuites = nil
+		if len(hello.SupportedVersions) == 1 {
+			hello.CipherSuites = nil
 		}
 		if fips140tls.Required() {
-			hello.cipherSuites = append(hello.cipherSuites, defaultCipherSuitesTLS13FIPS...)
+			hello.CipherSuites = append(hello.CipherSuites, defaultCipherSuitesTLS13FIPS...)
 		} else if hasAESGCMHardwareSupport {
-			hello.cipherSuites = append(hello.cipherSuites, defaultCipherSuitesTLS13...)
+			hello.CipherSuites = append(hello.CipherSuites, defaultCipherSuitesTLS13...)
 		} else {
-			hello.cipherSuites = append(hello.cipherSuites, defaultCipherSuitesTLS13NoAES...)
+			hello.CipherSuites = append(hello.CipherSuites, defaultCipherSuitesTLS13NoAES...)
 		}
 
-		if len(hello.supportedCurves) == 0 {
+		if len(hello.SupportedCurves) == 0 {
 			return nil, nil, nil, errors.New("tls: no supported elliptic curves for ECDHE")
 		}
-		// curveID := hello.supportedCurves[0]
+		// curveID := hello.SupportedCurves[0]
 		// keyShareKeys = &keySharePrivateKeys{curveID: curveID}
 		// // Note that if X25519MLKEM768 is supported, it will be first because
 		// // the preference order is fixed.
@@ -318,14 +318,14 @@ func (c *Conn) makeClientHelloForApplyPreset() (*clientHelloMsg, *keySharePrivat
 		// 	}
 		// 	mlkemEncapsulationKey := keyShareKeys.mlkem.EncapsulationKey().Bytes()
 		// 	x25519EphemeralKey := keyShareKeys.ecdhe.PublicKey().Bytes()
-		// 	hello.keyShares = []keyShare{
+		// 	hello.KeyShares = []keyShare{
 		// 		{group: X25519MLKEM768, data: append(mlkemEncapsulationKey, x25519EphemeralKey...)},
 		// 	}
 		// 	// If both X25519MLKEM768 and X25519 are supported, we send both key
 		// 	// shares (as a fallback) and we reuse the same X25519 ephemeral
 		// 	// key, as allowed by draft-ietf-tls-hybrid-design-09, Section 3.2.
-		// 	if slices.Contains(hello.supportedCurves, X25519) {
-		// 		hello.keyShares = append(hello.keyShares, keyShare{group: X25519, data: x25519EphemeralKey})
+		// 	if slices.Contains(hello.SupportedCurves, X25519) {
+		// 		hello.KeyShares = append(hello.KeyShares, keyShare{group: X25519, data: x25519EphemeralKey})
 		// 	}
 		// } else {
 		// 	if _, ok := curveForCurveID(curveID); !ok {
@@ -335,7 +335,7 @@ func (c *Conn) makeClientHelloForApplyPreset() (*clientHelloMsg, *keySharePrivat
 		// 	if err != nil {
 		// 		return nil, nil, nil, err
 		// 	}
-		// 	hello.keyShares = []keyShare{{group: curveID, data: keyShareKeys.ecdhe.PublicKey().Bytes()}}
+		// 	hello.KeyShares = []keyShare{{group: curveID, data: keyShareKeys.ecdhe.PublicKey().Bytes()}}
 		// }
 	}
 
@@ -348,7 +348,7 @@ func (c *Conn) makeClientHelloForApplyPreset() (*clientHelloMsg, *keySharePrivat
 	// 	if p == nil {
 	// 		p = []byte{}
 	// 	}
-	// 	hello.quicTransportParameters = p
+	// 	hello.QuicTransportParameters = p
 	// }
 
 	var ech *echClientContext
@@ -368,14 +368,14 @@ func (c *Conn) makeClientHelloForApplyPreset() (*clientHelloMsg, *keySharePrivat
 			return nil, nil, nil, errors.New("tls: EncryptedClientHelloConfigList contains no valid configs")
 		}
 		ech = &echClientContext{config: echConfig}
-		hello.encryptedClientHello = []byte{1} // indicate inner hello
+		hello.EncryptedClientHello = []byte{1} // indicate inner hello
 		// We need to explicitly set these 1.2 fields to nil, as we do not
 		// marshal them when encoding the inner hello, otherwise transcripts
 		// will later mismatch.
-		hello.supportedPoints = nil
-		hello.ticketSupported = false
-		hello.secureRenegotiationSupported = false
-		hello.extendedMasterSecret = false
+		hello.SupportedPoints = nil
+		hello.TicketSupported = false
+		hello.SecureRenegotiationSupported = false
+		hello.ExtendedMasterSecret = false
 
 		echPK, err := hpke.ParseHPKEPublicKey(ech.config.KemID, ech.config.PublicKey)
 		if err != nil {
@@ -439,7 +439,7 @@ func (c *UConn) clientHandshake(ctx context.Context) (err error) {
 	}
 
 	if c.handshakes > 0 {
-		hello.secureRenegotiation = c.clientFinished[:]
+		hello.SecureRenegotiation = c.clientFinished[:]
 	}
 
 	var (
@@ -489,10 +489,10 @@ func (c *UConn) clientHandshake(ctx context.Context) (err error) {
 
 		// Overwrite the server name in the outer hello with the public facing
 		// name.
-		hello.serverName = string(ech.config.PublicName)
-		// Generate a new random for the outer hello.
-		hello.random = make([]byte, 32)
-		_, err = io.ReadFull(c.config.rand(), hello.random)
+		hello.ServerName = string(ech.config.PublicName)
+		// Generate a new Random for the outer hello.
+		hello.Random = make([]byte, 32)
+		_, err = io.ReadFull(c.config.rand(), hello.Random)
 		if err != nil {
 			return errors.New("tls: short read from Rand: " + err.Error())
 		}
@@ -506,13 +506,13 @@ func (c *UConn) clientHandshake(ctx context.Context) (err error) {
 		}
 	}
 
-	c.serverName = hello.serverName
+	c.serverName = hello.ServerName
 
 	if _, err := c.writeHandshakeRecord(hello, nil); err != nil {
 		return err
 	}
 
-	if hello.earlyData {
+	if hello.EarlyData {
 		suite := cipherSuiteTLS13ByID(session.cipherSuite)
 		transcript := suite.hash.New()
 		if err := transcriptMsg(hello, transcript); err != nil {

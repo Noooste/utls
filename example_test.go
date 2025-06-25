@@ -74,7 +74,7 @@ func ExampleConfig_keyLogWriter() {
 	// WARNING: Use of KeyLogWriter compromises security and should only be
 	// used for debugging.
 
-	// Dummy test HTTP server for the example with insecure random so output is
+	// Dummy test HTTP server for the example with insecure Random so output is
 	// reproducible.
 	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	server.TLS = &tls.Config{

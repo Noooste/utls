@@ -269,7 +269,7 @@ func (e *UtlsPreSharedKeyExtension) PatchBuiltHello(hello *PubClientHelloMsg) er
 	if private == nil {
 		private = hello.getPrivatePtr()
 	}
-	private.original = hello.Raw
+	private.Original = hello.Raw
 	private.pskBinders = e.Binders // set the placeholder to the private Hello
 
 	//--- mirror loadSession() begin ---//
@@ -287,7 +287,7 @@ func (e *UtlsPreSharedKeyExtension) PatchBuiltHello(hello *PubClientHelloMsg) er
 
 	// copied from handshake_messages.go in 1.22
 	lenWithoutBinders := len(helloBytes)
-	b := cryptobyte.NewFixedBuilder(private.original[:lenWithoutBinders])
+	b := cryptobyte.NewFixedBuilder(private.Original[:lenWithoutBinders])
 	b.AddUint16LengthPrefixed(func(b *cryptobyte.Builder) {
 		for _, binder := range private.pskBinders {
 			b.AddUint8LengthPrefixed(func(b *cryptobyte.Builder) {
@@ -295,7 +295,7 @@ func (e *UtlsPreSharedKeyExtension) PatchBuiltHello(hello *PubClientHelloMsg) er
 			})
 		}
 	})
-	if out, err := b.Bytes(); err != nil || len(out) != len(private.original) {
+	if out, err := b.Bytes(); err != nil || len(out) != len(private.Original) {
 		return errors.New("tls: internal error: failed to update binders")
 	}
 

@@ -1358,8 +1358,8 @@ func TestHandshakClientSCTs(t *testing.T) {
 	}
 	runClientTestTLS12(t, test)
 
-	// TLS 1.3 moved SCTs to the Certificate extensions and -serverinfo only
-	// supports ServerHello extensions.
+	// TLS 1.3 moved SCTs to the Certificate Extensions and -serverinfo only
+	// supports ServerHello Extensions.
 }
 
 func TestRenegotiationRejected(t *testing.T) {
@@ -1506,10 +1506,10 @@ func TestHostnameInSNI(t *testing.T) {
 			t.Errorf("unmarshaling ClientHello for %q failed", tt.in)
 			continue
 		}
-		if tt.in != tt.out && m.serverName == tt.in {
+		if tt.in != tt.out && m.ServerName == tt.in {
 			t.Errorf("prohibited %q found in ClientHello: %x", tt.in, record)
 		}
-		if m.serverName != tt.out {
+		if m.ServerName != tt.out {
 			t.Errorf("expected %q not found in ClientHello: %x", tt.out, record)
 		}
 	}

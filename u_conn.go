@@ -91,7 +91,7 @@ func UClient(conn net.Conn, config *Config, clientHelloID ClientHelloID) *UConn 
 // BuildHandshakeState is automatically called before uTLS performs handshake,
 // and should only be called explicitly to inspect/change fields of
 // default/mimicked ClientHello.
-// With the excpetion of session ticket and psk extensions, which cannot be changed
+// With the excpetion of session ticket and psk Extensions, which cannot be changed
 // after calling BuildHandshakeState, all other fields can be modified.
 func (uconn *UConn) BuildHandshakeState() error {
 	return uconn.buildHandshakeState(true)
@@ -181,10 +181,10 @@ func (uconn *UConn) uLoadSession() error {
 		}
 		if session.version == VersionTLS12 {
 			// We use the session ticket extension for tls 1.2 session resumption
-			uconn.sessionController.initSessionTicketExt(session, hello.sessionTicket)
+			uconn.sessionController.initSessionTicketExt(session, hello.SessionTicket)
 			uconn.sessionController.setSessionTicketToUConn()
 		} else {
-			uconn.sessionController.initPskExt(session, earlySecret, binderKey, hello.pskIdentities)
+			uconn.sessionController.initPskExt(session, earlySecret, binderKey, hello.PskIdentities)
 		}
 	}
 
@@ -251,12 +251,12 @@ func (uconn *UConn) SetSessionCache(cache ClientSessionCache) {
 	uconn.HandshakeState.Hello.TicketSupported = true
 }
 
-// SetClientRandom sets client random explicitly.
+// SetClientRandom sets client Random explicitly.
 // BuildHandshakeFirst() must be called before SetClientRandom.
 // r must to be 32 bytes long.
 func (uconn *UConn) SetClientRandom(r []byte) error {
 	if len(r) != 32 {
-		return errors.New("Incorrect client random length! Expected: 32, got: " + strconv.Itoa(len(r)))
+		return errors.New("Incorrect client Random length! Expected: 32, got: " + strconv.Itoa(len(r)))
 	} else {
 		uconn.HandshakeState.Hello.Random = make([]byte, 32)
 		copy(uconn.HandshakeState.Hello.Random, r)
@@ -275,7 +275,7 @@ func (uconn *UConn) SetSNI(sni string) {
 	}
 }
 
-// RemoveSNIExtension removes SNI from the list of extensions sent in ClientHello
+// RemoveSNIExtension removes SNI from the list of Extensions sent in ClientHello
 // It returns an error when used with HelloGolang ClientHelloID
 func (uconn *UConn) RemoveSNIExtension() error {
 	if uconn.ClientHelloID == HelloGolang {
@@ -571,11 +571,11 @@ func (uconn *UConn) MarshalClientHello() error {
 			return err
 		}
 
-		// copy compressed extensions to the ClientHelloInner
-		inner.keyShares = KeyShares(uconn.HandshakeState.Hello.KeyShares).ToPrivate()
-		inner.supportedSignatureAlgorithms = uconn.HandshakeState.Hello.SupportedSignatureAlgorithms
+		// copy compressed Extensions to the ClientHelloInner
+		inner.KeyShares = KeyShares(uconn.HandshakeState.Hello.KeyShares).ToPrivate()
+		inner.SupportedSignatureAlgorithms = uconn.HandshakeState.Hello.SupportedSignatureAlgorithms
 		inner.sessionId = uconn.HandshakeState.Hello.SessionId
-		inner.supportedCurves = uconn.HandshakeState.Hello.SupportedCurves
+		inner.SupportedCurves = uconn.HandshakeState.Hello.SupportedCurves
 
 		ech.innerHello = inner
 
@@ -612,7 +612,7 @@ func (uconn *UConn) MarshalClientHelloNoECH() error {
 			if paddingExt == nil {
 				paddingExt = pe
 			} else {
-				return errors.New("multiple padding extensions")
+				return errors.New("multiple padding Extensions")
 			}
 		}
 	}
@@ -625,7 +625,7 @@ func (uconn *UConn) MarshalClientHelloNoECH() error {
 
 	helloLen := headerLength
 	if len(uconn.Extensions) > 0 {
-		helloLen += 2 + extensionsLen // 2 bytes for extensions' length
+		helloLen += 2 + extensionsLen // 2 bytes for Extensions' length
 	}
 
 	helloBuffer := bytes.Buffer{}
@@ -732,7 +732,7 @@ func (uconn *UConn) SetTLSVers(minTLSVers, maxTLSVers uint16, specExtensions []T
 			maxTLSVers = VersionTLS12
 		case 1:
 		default:
-			return fmt.Errorf("uconn.Extensions contains %v separate SupportedVersions extensions",
+			return fmt.Errorf("uconn.Extensions contains %v separate SupportedVersions Extensions",
 				supportedVersionsExtensionsPresent)
 		}
 	}

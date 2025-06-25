@@ -84,7 +84,7 @@ const shouldLoad shouldLoadSessionResult = 3
 //   - In all other cases, the function proceeds to load the session.
 func (s *sessionController) shouldLoadSession() shouldLoadSessionResult {
 	if s.sessionTicketExt == nil && s.pskExtension == nil || s.uconnRef.clientHelloBuildStatus != NotBuilt {
-		// No need to load session since we don't have the related extensions.
+		// No need to load session since we don't have the related Extensions.
 		return shouldReturn
 	}
 	if s.state == SessionTicketExtInitialized {
@@ -250,13 +250,13 @@ func (s *sessionController) overrideSessionTicketExt(sessionTicketExt ISessionTi
 }
 
 // syncSessionExts synchronizes the sessionController with the session-related
-// extensions from the extension list after applying client hello specs.
+// Extensions from the extension list after applying client hello specs.
 //
 //   - If the extension list is missing the session ticket extension or PSK
-//     extension, owned extensions are dropped and states are reset.
+//     extension, owned Extensions are dropped and states are reset.
 //   - If the user provides a session ticket extension or PSK extension, the
 //     corresponding extension from the extension list will be replaced.
-//   - If the user doesn't provide session-related extensions, the extensions
+//   - If the user doesn't provide session-related Extensions, the Extensions
 //     from the extension list will be utilized.
 //
 // This function ensures that there is only one session ticket extension or PSK

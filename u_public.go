@@ -268,7 +268,7 @@ func (c *PubCipherSuiteTLS13) toPrivate() *cipherSuiteTLS13 {
 }
 
 type PubServerHelloMsg struct {
-	Raw                          []byte // renamed to serverHelloMsg.original in crypto/tls
+	Raw                          []byte // renamed to serverHelloMsg.Original in crypto/tls
 	Vers                         uint16
 	Random                       []byte
 	SessionId                    []byte
@@ -355,7 +355,7 @@ func (shm *serverHelloMsg) getPublicPtr() *PubServerHelloMsg {
 }
 
 type PubClientHelloMsg struct {
-	Raw                          []byte // renamed to clientHelloMsg.original in crypto/tls
+	Raw                          []byte // renamed to clientHelloMsg.Original in crypto/tls
 	Vers                         uint16
 	Random                       []byte
 	SessionId                    []byte
@@ -395,37 +395,37 @@ func (chm *PubClientHelloMsg) getPrivatePtr() *clientHelloMsg {
 		return nil
 	} else {
 		private := &clientHelloMsg{
-			original:                         chm.Raw,
-			vers:                             chm.Vers,
-			random:                           chm.Random,
+			Original:                         chm.Raw,
+			Vers:                             chm.Vers,
+			Random:                           chm.Random,
 			sessionId:                        chm.SessionId,
-			cipherSuites:                     chm.CipherSuites,
-			compressionMethods:               chm.CompressionMethods,
-			serverName:                       chm.ServerName,
-			ocspStapling:                     chm.OcspStapling,
-			supportedCurves:                  chm.SupportedCurves,
-			supportedPoints:                  chm.SupportedPoints,
-			ticketSupported:                  chm.TicketSupported,
-			sessionTicket:                    chm.SessionTicket,
-			supportedSignatureAlgorithms:     chm.SupportedSignatureAlgorithms,
-			supportedSignatureAlgorithmsCert: chm.SupportedSignatureAlgorithmsCert,
-			secureRenegotiationSupported:     chm.SecureRenegotiationSupported,
-			secureRenegotiation:              chm.SecureRenegotiation,
-			extendedMasterSecret:             chm.Ems,
-			alpnProtocols:                    chm.AlpnProtocols,
+			CipherSuites:                     chm.CipherSuites,
+			CompressionMethods:               chm.CompressionMethods,
+			ServerName:                       chm.ServerName,
+			OcspStapling:                     chm.OcspStapling,
+			SupportedCurves:                  chm.SupportedCurves,
+			SupportedPoints:                  chm.SupportedPoints,
+			TicketSupported:                  chm.TicketSupported,
+			SessionTicket:                    chm.SessionTicket,
+			SupportedSignatureAlgorithms:     chm.SupportedSignatureAlgorithms,
+			SupportedSignatureAlgorithmsCert: chm.SupportedSignatureAlgorithmsCert,
+			SecureRenegotiationSupported:     chm.SecureRenegotiationSupported,
+			SecureRenegotiation:              chm.SecureRenegotiation,
+			ExtendedMasterSecret:             chm.Ems,
+			AlpnProtocols:                    chm.AlpnProtocols,
 			scts:                             chm.Scts,
 
-			supportedVersions:       chm.SupportedVersions,
+			SupportedVersions:       chm.SupportedVersions,
 			cookie:                  chm.Cookie,
-			keyShares:               KeyShares(chm.KeyShares).ToPrivate(),
-			earlyData:               chm.EarlyData,
+			KeyShares:               KeyShares(chm.KeyShares).ToPrivate(),
+			EarlyData:               chm.EarlyData,
 			pskModes:                chm.PskModes,
-			pskIdentities:           PskIdentities(chm.PskIdentities).ToPrivate(),
+			PskIdentities:           PskIdentities(chm.PskIdentities).ToPrivate(),
 			pskBinders:              chm.PskBinders,
-			quicTransportParameters: chm.QuicTransportParameters,
-			encryptedClientHello:    chm.encryptedClientHello,
+			QuicTransportParameters: chm.QuicTransportParameters,
+			EncryptedClientHello:    chm.encryptedClientHello,
 
-			nextProtoNeg: chm.NextProtoNeg,
+			NextProtoNeg: chm.NextProtoNeg,
 		}
 		chm.cachedPrivateHello = private
 		return private
@@ -445,37 +445,37 @@ func (chm *clientHelloMsg) getPublicPtr() *PubClientHelloMsg {
 		return nil
 	} else {
 		return &PubClientHelloMsg{
-			Raw:                          chm.original,
-			Vers:                         chm.vers,
-			Random:                       chm.random,
+			Raw:                          chm.Original,
+			Vers:                         chm.Vers,
+			Random:                       chm.Random,
 			SessionId:                    chm.sessionId,
-			CipherSuites:                 chm.cipherSuites,
-			CompressionMethods:           chm.compressionMethods,
-			NextProtoNeg:                 chm.nextProtoNeg,
-			ServerName:                   chm.serverName,
-			OcspStapling:                 chm.ocspStapling,
+			CipherSuites:                 chm.CipherSuites,
+			CompressionMethods:           chm.CompressionMethods,
+			NextProtoNeg:                 chm.NextProtoNeg,
+			ServerName:                   chm.ServerName,
+			OcspStapling:                 chm.OcspStapling,
 			Scts:                         chm.scts,
-			Ems:                          chm.extendedMasterSecret,
-			SupportedCurves:              chm.supportedCurves,
-			SupportedPoints:              chm.supportedPoints,
-			TicketSupported:              chm.ticketSupported,
-			SessionTicket:                chm.sessionTicket,
-			SupportedSignatureAlgorithms: chm.supportedSignatureAlgorithms,
-			SecureRenegotiation:          chm.secureRenegotiation,
-			SecureRenegotiationSupported: chm.secureRenegotiationSupported,
-			AlpnProtocols:                chm.alpnProtocols,
+			Ems:                          chm.ExtendedMasterSecret,
+			SupportedCurves:              chm.SupportedCurves,
+			SupportedPoints:              chm.SupportedPoints,
+			TicketSupported:              chm.TicketSupported,
+			SessionTicket:                chm.SessionTicket,
+			SupportedSignatureAlgorithms: chm.SupportedSignatureAlgorithms,
+			SecureRenegotiation:          chm.SecureRenegotiation,
+			SecureRenegotiationSupported: chm.SecureRenegotiationSupported,
+			AlpnProtocols:                chm.AlpnProtocols,
 
-			SupportedSignatureAlgorithmsCert: chm.supportedSignatureAlgorithmsCert,
-			SupportedVersions:                chm.supportedVersions,
+			SupportedSignatureAlgorithmsCert: chm.SupportedSignatureAlgorithmsCert,
+			SupportedVersions:                chm.SupportedVersions,
 			Cookie:                           chm.cookie,
-			KeyShares:                        keyShares(chm.keyShares).ToPublic(),
-			EarlyData:                        chm.earlyData,
+			KeyShares:                        keyShares(chm.KeyShares).ToPublic(),
+			EarlyData:                        chm.EarlyData,
 			PskModes:                         chm.pskModes,
-			PskIdentities:                    pskIdentities(chm.pskIdentities).ToPublic(),
+			PskIdentities:                    pskIdentities(chm.PskIdentities).ToPublic(),
 			PskBinders:                       chm.pskBinders,
-			QuicTransportParameters:          chm.quicTransportParameters,
+			QuicTransportParameters:          chm.QuicTransportParameters,
 			cachedPrivateHello:               chm,
-			encryptedClientHello:             chm.encryptedClientHello,
+			encryptedClientHello:             chm.EncryptedClientHello,
 		}
 	}
 }

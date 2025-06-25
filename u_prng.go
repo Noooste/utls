@@ -44,7 +44,7 @@ func NewPRNGSeed() (*PRNGSeed, error) {
 // salt. A HKDF is applied to the seed and salt.
 //
 // newSaltedPRNGSeed is intended for use cases where a single seed needs to be
-// used in distinct contexts to produce independent random streams.
+// used in distinct contexts to produce independent Random streams.
 func newSaltedPRNGSeed(seed *PRNGSeed, salt string) (*PRNGSeed, error) {
 	saltedSeed := new(PRNGSeed)
 	_, err := io.ReadFull(
@@ -104,7 +104,7 @@ func newPRNGWithSaltedSeed(seed *PRNGSeed, salt string) (*prng, error) {
 	return newPRNGWithSeed(saltedSeed)
 }
 
-// Read reads random bytes from the PRNG stream into b. Read conforms to
+// Read reads Random bytes from the PRNG stream into b. Read conforms to
 // io.Reader and always returns len(p), nil.
 func (p *prng) Read(b []byte) (int, error) {
 	p.randomStreamMutex.Lock()
@@ -136,7 +136,7 @@ func (p *prng) Seed(_ int64) {
 }
 
 // FlipWeightedCoin returns the result of a weighted
-// random coin flip. If the weight is 0.5, the outcome
+// Random coin flip. If the weight is 0.5, the outcome
 // is equally likely to be true or false. If the weight
 // is 1.0, the outcome is always true, and if the
 // weight is 0.0, the outcome is always false.
@@ -173,7 +173,7 @@ func (p *prng) Perm(n int) []int {
 	return p.rand.Perm(n)
 }
 
-// Range selects a random integer in [min, max].
+// Range selects a Random integer in [min, max].
 // If min < 0, min is set to 0. If max < min, min is returned.
 func (p *prng) Range(min, max int) int {
 	if min < 0 {

@@ -100,7 +100,7 @@ func checkUTLSExtensionsEquality(t *testing.T, expected, actual TLSExtension) {
 	}
 
 	logInequality := func() {
-		t.Errorf("extensions not equal\nexpected: %#v\nbytes:%#x\ngot: %#v\nbytes: %#x", expected, expectedBytes, actual, actualBytes)
+		t.Errorf("Extensions not equal\nexpected: %#v\nbytes:%#x\ngot: %#v\nbytes: %#x", expected, expectedBytes, actual, actualBytes)
 	}
 
 	if !bytes.Equal(expectedBytes, actualBytes) {
@@ -110,7 +110,7 @@ func checkUTLSExtensionsEquality(t *testing.T, expected, actual TLSExtension) {
 		expectedType := reflect.TypeOf(expected)
 		actualType := reflect.TypeOf(actual)
 		if expectedType != actualType {
-			t.Errorf("extensions not equal\nexpected: %#v\nbytes:%#x\ngot: %#v\nbytes: %#x", expected, expectedBytes, actual, actualBytes)
+			t.Errorf("Extensions not equal\nexpected: %#v\nbytes:%#x\ngot: %#v\nbytes: %#x", expected, expectedBytes, actual, actualBytes)
 			return
 		}
 
@@ -209,11 +209,11 @@ func checkUTLSFingerPrintClientHello(t *testing.T, clientHelloID ClientHelloID, 
 		t.Errorf("UConn from fingerprint has %d length, should have %d", len(generatedUConn.HandshakeState.Hello.Raw), len(uconn.HandshakeState.Hello.Raw))
 	}
 
-	// We can't effectively check the extensions on randomized client hello ids
+	// We can't effectively check the Extensions on randomized client hello ids
 	if !(clientHelloID == HelloRandomized || clientHelloID == HelloRandomizedALPN || clientHelloID == HelloRandomizedNoALPN) {
 		for i, originalExtension := range uconn.Extensions {
 			if _, ok := originalExtension.(*UtlsPaddingExtension); ok {
-				// We can't really compare padding extensions in this way
+				// We can't really compare padding Extensions in this way
 				continue
 			}
 
@@ -250,7 +250,7 @@ func TestUTLSFingerprintClientHello(t *testing.T) {
 func TestUTLSFingerprintClientHelloBluntMimicry(t *testing.T) {
 	serverName := "foobar"
 	var extensionId uint16 = 0xfeed
-	extensionData := []byte("random data")
+	extensionData := []byte("Random data")
 
 	specWithGeneric, err := utlsIdToSpec(HelloChrome_Auto)
 	if err != nil {

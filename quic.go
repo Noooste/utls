@@ -367,7 +367,7 @@ func quicError(err error) error {
 	if !errors.As(err, &a) {
 		a = alertInternalError
 	}
-	// Return an error wrapping the original error and an AlertError.
+	// Return an error wrapping the Original error and an AlertError.
 	// Truncate the text of the alert to 0 characters.
 	return fmt.Errorf("%w%.0w", err, AlertError(a))
 }
