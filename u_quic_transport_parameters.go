@@ -104,6 +104,28 @@ func (g *GREASETransportParameter) Value() []byte {
 	return g.ValueOverride
 }
 
+type InitialRTT struct{}
+
+func (*InitialRTT) ID() uint64 {
+	return 0x3127
+}
+
+func (*InitialRTT) Value() []byte {
+	return []byte{}
+}
+
+type GoogleVersion struct {
+	Version uint8
+}
+
+func (GoogleVersion) ID() uint64 {
+	return 0x4752
+}
+
+func (g GoogleVersion) Value() []byte {
+	return quicvarint.Append([]byte{}, uint64(g.Version))
+}
+
 type MaxIdleTimeout uint64 // in milliseconds
 
 func (MaxIdleTimeout) ID() uint64 {
@@ -268,7 +290,7 @@ func (*VersionInformation) GetGREASEVersion() uint32 {
 		return VERSION_GREASE
 	}
 
-	return uint32(randVal.Uint64()&math.MaxUint32) | 0x0a0a0a0a // all GREASE versions are in 0x?a?a?a?a
+	return uint32(randVal.Uint64()&math.MaxUint32) | 0xa0a0a0a // all GREASE versions are in 0xa?a?a?a
 }
 
 type PaddingTransportParameter []byte
